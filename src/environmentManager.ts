@@ -2,34 +2,62 @@ import * as shelljs from 'shelljs';
 import { RegistryManager } from './registry';
 import { PackageManager } from './packageManager';
 
+/**
+ * Environment manager manages the registry of environments.
+ * When we start for the first time, we discover all the environments and store them in the registry.
+ * When we create a new environment, we add it to the registry after it's validated to be created.
+ *
+ */
+export class EnvironmentManager {
+  private registryManager: RegistryManager;
+
+  /**
+   * Discovers existing environments.
+   * @param {boolean} [forceRefresh=false] - A flag to force refresh the environments.
+   * @returns {string[]} - An array of environment names.
+   */
+  public discoverEnvironments(forceRefresh = false): string[] {}
+
+
+
+/*
+
+Environment operations
+clean
+compare (env1, env2)
+config
+list
+rename
+update?
+
+
+
 export class EnvironmentManager {
   private registryManager: RegistryManager;
   private packageManager: PackageManager;
 
+  /**
+   * Creates an instance of EnvironmentManager.
+   */
   constructor() {
     this.registryManager = new RegistryManager();
     this.packageManager = new PackageManager();
   }
 
+  /**
+   * Discovers existing environments.
+   * @param {boolean} [forceRefresh=false] - A flag to force refresh the environments.
+   * @returns {string[]} - An array of environment names.
+   */
   public discoverEnvironments(forceRefresh = false): string[] {
     let environments: string[] = [];
 
     if (forceRefresh || !this.registryManager.isRegistryCreated()) {
       const condaCommand = 'conda env list --json';
-      const pyenvCommand = 'pyenv virtualenvs --bare';
-      const virtualenvCommand = 'lsvirtualenv -b';
 
       let result = shelljs.exec(condaCommand, { silent: true });
       const condaEnvironments = JSON.parse(result.stdout)?.envs || [];
       environments.push(...condaEnvironments);
-
-      result = shelljs.exec(pyenvCommand, { silent: true });
-      const pyenvEnvironments = result.stdout?.split('\n') || [];
-      environments.push(...pyenvEnvironments);
-
-      result = shelljs.exec(virtualenvCommand, { silent: true });
-      const virtualenvEnvironments = result.stdout?.split('\n') || [];
-      environments.push(...virtualenvEnvironments);
 
       environments = environments.filter(env => env !== '');
       environments.forEach(env => this.registryManager.addEnvironment(env));
@@ -40,44 +68,52 @@ export class EnvironmentManager {
     return environments;
   }
 
-  public createEnvironment(name: string, manager: string): void {
-    const commandMap: { [key: string]: string } = {
-      conda: `conda create --name ${name} python`,
-      pyenv: `pyenv virtualenv ${name}`,
-      virtualenvwrapper: `mkvirtualenv ${name}`
-    };
+  /**
+   * Creates a new environment.
+   * @param {string} name - The name of the environment.
+   * @throws {Error} - If an invalid manager is provided.
+   */
+  public createEnvironment(name: string): void {
+    const condaCommand = `conda create --name ${name} python`;
 
-    const command = commandMap[manager];
-    if (!command) {
-      throw new Error(`Invalid manager: ${manager}`);
-    }
-
-    shelljs.exec(command, { silent: true });
+    shelljs.exec(condaCommand, { silent: true });
   }
 
-  public removeEnvironment(name: string, manager: string): void {
-    const commandMap: { [key: string]: string } = {
-      conda: `conda env remove --name ${name} --yes`,
-      pyenv: `pyenv virtualenv-delete ${name}`,
-      virtualenvwrapper: `rmvirtualenv ${name}`
-    };
+  /**
+   * Removes an existing environment.
+   * @param {string} name - The name of the environment to remove.
+   * @throws {Error} - If an invalid manager is provided.
+   */
+  public removeEnvironment(name: string): void {
+    const condaCommand = `conda env remove --name ${name} --yes`;
 
-    const command = commandMap[manager];
-    if (!command) {
-      throw new Error(`Invalid manager: ${manager}`);
-    }
-
-    shelljs.exec(command, { silent: true });
+    shelljs.exec(condaCommand, { silent: true });
   }
 
-  public installPackage(environmentName: string, packageName: string, manager: string): void {
-    this.packageManager.installPackage(environmentName, packageName, manager);
+  /**
+   * Installs a package in a specific environment.
+   * @param {string} environmentName - The name of the environment.
+   * @param {string} packageName - The name of the package to install.
+   */
+  public installPackage(environmentName: string, packageName: string): void {
+    this.packageManager.installPackage(environmentName, packageName, 'conda');
   }
 
-  public uninstallPackage(environmentName: string, packageName: string, manager: string): void {
-    this.packageManager.uninstallPackage(environmentName, packageName, manager);
+  /**
+   * Uninstalls a package from a specific environment.
+   * @param {string} environmentName - The name of the environment.
+   * @param {string} packageName - The name of the package to uninstall.
+   */
+  public uninstallPackage(environmentName: string, packageName: string): void {
+    this.packageManager.uninstallPackage(environmentName, packageName, 'conda');
   }
 
+  /**
+   * Retrieves details about an environment.
+   * @param {string} environmentName - The name of the environment.
+   * @returns {{ manager: string, scriptPath: string }} - An object containing the manager and script path of the environment.
+   * @throws {Error} - If an invalid environment name is provided.
+   */
   public getEnvironmentDetails(environmentName: string): { manager: string, scriptPath: string } {
     let manager = '';
     let scriptPath = '';
@@ -85,12 +121,6 @@ export class EnvironmentManager {
     if (environmentName === 'env1') {
       manager = 'conda';
       scriptPath = '/path/to/env1/activate_script.sh';
-    } else if (environmentName === 'env2') {
-      manager = 'pyenv';
-      scriptPath = '/path/to/env2/activate_script.sh';
-    } else if (environmentName === 'env3') {
-      manager = 'virtualenvwrapper';
-      scriptPath = '/path/to/env3/activate_script.sh';
     } else {
       throw new Error(`Invalid environment name: ${environmentName}`);
     }
