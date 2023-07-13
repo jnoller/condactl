@@ -92,6 +92,10 @@ export class EnvironmentManager {
     return environments;
   }
 
+
+
+
+
   /**
    * Creates a new environment with the specified name.
    * @param name The name of the environment to create.
@@ -237,6 +241,28 @@ export class EnvironmentManager {
         this.handleCommandResult(condaCommand, result);
       } catch (error) {
         console.error(`Failed to update environment '${name}': ${error}`);
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Lists the environments.
+   * @param name The name of the environment to list.
+   * @returns A promise that resolves when the environments are listed.
+   */
+  public async listEnvironments(name: string): Promise<void> {
+    const condaCommand = 'conda';
+    const args = ['list'];
+
+    await this.withLock(name, async () => {
+      try {
+        const result = await this.commander.exec('', condaCommand, args, { captureOutput: true });
+        this.handleCommandResult(condaCommand, result);
+
+        // TODO: Drop the lock and force a refresh of the registry after successful listing
+      } catch (error) {
+        console.error(`Failed to list environments: ${error}`);
         throw error;
       }
     });
