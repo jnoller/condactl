@@ -1,7 +1,7 @@
 import shelljs, { ShellString } from 'shelljs';
 import process from 'process';
 import os from 'os';
-import shelljsExecProxy, { ExecOutputReturnValue } from 'shelljs-exec-proxy';
+import shelljsExecProxy from 'shelljs-exec-proxy';
 
 export class Commander {
   private shell: string;
@@ -75,7 +75,7 @@ export class Commander {
     if (!options.captureOutput) {
       shelljs.config.silent = true;
     }
-
+ av
     const result: ShellString = shelljsExecProxy.exec(command, { shell: this.shell });
 
     shelljs.config.silent = true;
