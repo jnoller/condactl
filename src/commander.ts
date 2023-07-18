@@ -23,7 +23,7 @@ export class Commander {
    * @param cmd - The command to validate.
    * @throws {ShellCommandError} - If conda is not available or the command does not exist.
    */
-  private validateCmd(environment: string, cmd: string): void {
+  public validateCmd(environment: string, cmd: string): void {
     const condaCheck = shelljs.which('conda');
     if (!condaCheck) {
       throw new ShellCommandError(`Conda is not available in the current shell`, 1);
@@ -60,12 +60,12 @@ export class Commander {
   }
 
   /**
-   * Executes a shell command asynchronously.
+   * Executes a shell command synchronously.
    * @param environment - The conda environment.
    * @param cmd - The command to execute.
    * @param args - The arguments for the command.
    * @param options - Additional options for the command.
-   * @returns {Promise<ShellString>} - A promise that resolves with the result of the command.
+   * @returns {ShellString} - The result of the command.
    * @throws {ShellCommandError} - If the command fails.
    */
   public exec(

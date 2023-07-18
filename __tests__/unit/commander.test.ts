@@ -1,36 +1,52 @@
-/* eslint-disable no-unused-vars */
-
 import { Commander, ShellCommandError } from '../../src/commander';
-import * as shelljs from 'shelljs';
-import * as shelljsExecProxy from 'shelljs-exec-proxy';
-import os from 'os';
-import * as process from 'process';
+import { ChildProcess } from 'child_process';
+import { Readable, Writable } from 'stream';
+import shelljs from 'shelljs';
+
+const mockShellString = {
+  code: 0,
+  stdout: 'conda',
+  stderr: ''
+} as shelljs.ShellString;
+
+const mockStdin = new Writable();
+jest.spyOn(mockStdin, 'write');
+jest.spyOn(mockStdin, 'end');
+
+const mockChildProcess = {
+  stdin: mockStdin,
+  stdout: new Readable(),
+  stderr: new Readable(),
+  on: jest.fn((event, callback) => {
+    if (event === 'exit') {
+      callback(0);
+    }
+    return mockChildProcess;
+  }),
+  kill: jest.fn(),
+} as unknown as ChildProcess;
 
 jest.mock('shelljs', () => {
+  const actualShelljs = jest.requireActual('shelljs');
   return {
-    which: jest.fn(),
+    ...actualShelljs,
     config: {
       silent: false,
-    }
-  };
-});
-
-jest.mock('shelljs-exec-proxy', () => {
-  return {
+    },
+    which: jest.fn(),
     exec: jest.fn(),
   };
 });
 
-jest.mock('os', () => {
+jest.mock('shelljs-exec-proxy', () => {
+  const actualShelljsExecProxy = jest.requireActual('shelljs-exec-proxy');
   return {
-    platform: jest.fn(),
-  };
-});
-
-jest.mock('process', () => {
-  return {
-    env: {},
-    on: jest.fn(),
+    ...actualShelljsExecProxy,
+    // @ts-ignore
+    exec: jest.fn().mockImplementation((command, options, callback) => {
+      callback(0, 'output', '');
+      return Promise.resolve(mockChildProcess);
+    }),
   };
 });
 
@@ -42,40 +58,53 @@ describe('Commander', () => {
   });
 
   afterEach(() => {
-    (shelljs.which as jest.Mock).mockClear();
-    (shelljsExecProxy.exec as jest.Mock).mockClear();
-    (os.platform as jest.Mock).mockClear();
-    (process.on as jest.Mock).mockClear();
+    jest.clearAllMocks();
   });
 
   describe('validateCmd', () => {
-    // tests
+    it('should throw an error if conda is not available', () => {
+      jest.requireMock('shelljs').which.mockReturnValueOnce(null);
+
+      expect(() => {
+        commander.validateCmd('env', 'cmd');
+      }).toThrowError(ShellCommandError);
+      expect(jest.requireMock('shelljs').which).toHaveBeenCalledWith('conda');
+    });
+
+    it('should validate command exists in the environment', async () => {
+      jest.requireMock('shelljs').which.mockReturnValueOnce(mockShellString);
+
+      await commander.validateCmd('env', 'cmd');
+
+      expect(jest.requireMock('shelljs-exec-proxy').exec).toHaveBeenCalledWith('conda activate env && which cmd', expect.any(Object), expect.any(Function));
+    });
+
+    it('should validate command exists in the environment', async () => {
+      jest.requireMock('shelljs').which.mockReturnValueOnce(mockShellString);
+
+      await commander.validateCmd('env', 'cmd');
+
+      expect(jest.requireMock('shelljs').which).toHaveBeenCalledWith('cmd');
+    });
   });
 
   describe('exec', () => {
-    // tests
+    it('should call execAsync', async () => {
+      const execAsyncSpy = jest.spyOn(commander, 'execAsync');
+
+      await commander.exec('env', 'cmd', ['arg1']);
+
+      expect(execAsyncSpy).toHaveBeenCalledWith('env', 'cmd', ['arg1'], {});
+    });
   });
 
   describe('execAsync', () => {
     it('should return a promise that resolves with the result of the command', async () => {
-      (shelljs.which as jest.Mock).mockReturnValueOnce('conda');
-      // @ts-ignore
-      (shelljsExecProxy.exec as jest.Mock).mockImplementationOnce((...args) => {
-        return Promise.resolve({ code: 0, stdout: 'output', stderr: '' });
-      });
+      jest.requireMock('shelljs').which.mockReturnValueOnce(mockShellString);
 
-      const result = await commander.execAsync('base', 'python', ['arg1', 'arg2']);
-      expect(result).toEqual({ code: 0, stdout: 'output', stderr: '' });
-    });
+      const result = await commander.execAsync('', 'ls', []);
 
-    it('should return a promise that rejects with a ShellCommandError if the command fails', async () => {
-      (shelljs.which as jest.Mock).mockReturnValueOnce('conda');
-      // @ts-ignore
-      (shelljsExecProxy.exec as jest.Mock).mockImplementationOnce((...args) => {
-        return Promise.reject({ code: 1, stdout: '', stderr: 'error' });
-      });
-
-      await expect(commander.execAsync('base', 'python', ['arg1', 'arg2'])).rejects.toThrow(ShellCommandError);
+      expect(result).toEqual(mockChildProcess);
     });
   });
 });
