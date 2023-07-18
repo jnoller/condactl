@@ -3,24 +3,32 @@ import process from 'process';
 import os from 'os';
 import shelljsExecProxy from 'shelljs-exec-proxy';
 
+/**
+ * Commander class for executing shell commands.
+ */
 export class Commander {
   private shell: string;
 
   constructor() {
     if (os.platform() === 'win32') {
-      this.shell = process.env.COMSPEC || "";
+      this.shell = process.env.COMSPEC || "cmd";
     } else {
-      this.shell = process.env.SHELL || "";
+      this.shell = process.env.SHELL || "/bin/bash"; //todo: check if this works on macos / zsh as a fallback
     }
   }
 
   /**
-   * Validates the specified environment and command.
-   * @param environment - The name of the environment.
-   * @param cmd - The command to be validated.
-   * @throws ShellCommandError if the environment does not exist or the command does not exist.
+   * Validates the command and environment.
+   * @param environment - The conda environment.
+   * @param cmd - The command to validate.
+   * @throws {ShellCommandError} - If conda is not available or the command does not exist.
    */
   private validateCmd(environment: string, cmd: string): void {
+    const condaCheck = shelljs.which('conda');
+    if (!condaCheck) {
+      throw new ShellCommandError(`Conda is not available in the current shell`, 1);
+    }
+
     let finalCmd: string;
     if (environment) {
       finalCmd = `conda activate ${environment} && which ${cmd}`;
@@ -39,9 +47,9 @@ export class Commander {
   }
 
   /**
-   * Checks if the given path is an absolute path.
+   * Checks if the path is an absolute path.
    * @param path - The path to check.
-   * @returns True if the path is an absolute path, false otherwise.
+   * @returns {boolean} - True if the path is an absolute path, false otherwise.
    */
   private isAbsolutePath(path: string): boolean {
     if (os.platform() === 'win32') {
@@ -52,49 +60,33 @@ export class Commander {
   }
 
   /**
-   * Executes a command synchronously in the specified environment.
-   * @param environment - The name of the environment.
-   * @param cmd - The command to be executed.
-   * @param args - The arguments to be passed to the command.
-   * @param options - Additional options for the command execution.
-   * @returns The standard output and standard error of the command.
-   * @throws ShellCommandError if the command fails to execute.
+   * Executes a shell command asynchronously.
+   * @param environment - The conda environment.
+   * @param cmd - The command to execute.
+   * @param args - The arguments for the command.
+   * @param options - Additional options for the command.
+   * @returns {Promise<ShellString>} - A promise that resolves with the result of the command.
+   * @throws {ShellCommandError} - If the command fails.
    */
-  public execSync(
+  public exec(
     environment: string,
     cmd: string,
     args: string[],
     options: {
       captureOutput?: boolean,
     } = {}
-  ): ShellString {
-    this.validateCmd(environment, cmd);
-
-    const command = this.buildCommand(environment, cmd, args);
-
-    if (!options.captureOutput) {
-      shelljs.config.silent = true;
-    }
- av
-    const result: ShellString = shelljsExecProxy.exec(command, { shell: this.shell });
-
-    shelljs.config.silent = true;
-
-    if (result.code !== 0) {
-      throw new ShellCommandError(`Command failed: ${result.stderr}`, result.code);
-    }
-
-    return result;
+  ): Promise<ShellString> {
+    return this.execAsync(environment, cmd, args, options);
   }
 
   /**
-   * Executes a command asynchronously in the specified environment.
-   * @param environment - The name of the environment.
-   * @param cmd - The command to be executed.
-   * @param args - The arguments to be passed to the command.
-   * @param options - Additional options for the command execution.
-   * @returns A Promise that resolves with the standard output and standard error of the command.
-   * @throws ShellCommandError if the command fails to execute.
+   * Executes a shell command asynchronously.
+   * @param environment - The conda environment.
+   * @param cmd - The command to execute.
+   * @param args - The arguments for the command.
+   * @param options - Additional options for the command.
+   * @returns {Promise<ShellString>} - A promise that resolves with the result of the command.
+   * @throws {ShellCommandError} - If the command fails.
    */
   public execAsync(
     environment: string,
@@ -108,6 +100,7 @@ export class Commander {
 
     const command = this.buildCommand(environment, cmd, args);
 
+    const originalSilent = shelljs.config.silent;
     if (!options.captureOutput) {
       shelljs.config.silent = true;
     }
@@ -117,8 +110,9 @@ export class Commander {
         command,
         { async: true, shell: this.shell },
         (code, stdout, stderr) => {
+          shelljs.config.silent = originalSilent;
           if (code !== 0) {
-            reject(new ShellCommandError(`Command failed: ${stderr}`, code));
+            reject(new ShellCommandError(`Command '${command}' failed: ${stderr}`, code));
           } else {
             resolve({ code, stdout, stderr } as ShellString);
           }
@@ -132,15 +126,16 @@ export class Commander {
       process.on('exit', cleanup);
       process.on('SIGINT', cleanup);
       process.on('SIGTERM', cleanup);
+      process.on('uncaughtException', cleanup);
     });
   }
 
   /**
-   * Builds the command to be executed.
-   * @param environment - The name of the environment.
-   * @param cmd - The command to be executed.
-   * @param args - The arguments to be passed to the command.
-   * @returns The constructed command.
+   * Builds the command to execute.
+   * @param environment - The conda environment.
+   * @param cmd - The command to execute.
+   * @param args - The arguments for the command.
+   * @returns {string} - The built command.
    */
   private buildCommand(environment: string, cmd: string, args: string[]): string {
     if (environment) {

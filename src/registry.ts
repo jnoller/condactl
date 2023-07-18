@@ -1,15 +1,20 @@
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 
 export class RegistryManager {
   public registryPath: string;
   private registry: { [key: string]: boolean };
 
   constructor(registryPath?: string) {
-    this.registryPath = registryPath ?? path.join(process.env.HOME ?? '', '.cope', 'registry.json');
+    this.registryPath = registryPath ?? path.join(os.homedir(), '.cope', 'registry.json');
     this.registry = {};
   }
 
+  /**
+   * Initializes the registry by checking if the registry file exists and loading its contents.
+   * If the file does not exist, it will be created with an empty registry.
+   */
   public async init(): Promise<void> {
     try {
       await fs.access(this.registryPath);
@@ -23,6 +28,10 @@ export class RegistryManager {
     await this.loadRegistry();
   }
 
+  /**
+   * Loads the registry from the registry file.
+   * If the file does not exist or an error occurs while reading the file, an empty registry will be used.
+   */
   private async loadRegistry(): Promise<void> {
     try {
       const registryData = await fs.readFile(this.registryPath, 'utf-8');
@@ -32,6 +41,10 @@ export class RegistryManager {
     }
   }
 
+  /**
+   * Saves the registry to the registry file.
+   * If an error occurs while writing the file, it will be logged and re-thrown.
+   */
   private async saveRegistry(): Promise<void> {
     try {
       const registryData = JSON.stringify(this.registry, null, 2);
@@ -42,6 +55,10 @@ export class RegistryManager {
     }
   }
 
+  /**
+   * Checks if the registry file exists.
+   * @returns {Promise<boolean>} - True if the registry file exists, false otherwise.
+   */
   public async isRegistryCreated(): Promise<boolean> {
     try {
       await fs.access(this.registryPath);
@@ -51,15 +68,27 @@ export class RegistryManager {
     }
   }
 
+  /**
+   * Retrieves the environments from the registry.
+   * @returns {Object} - The registry object containing the environments.
+   */
   public getEnvironments(): { [key: string]: boolean } {
     return this.registry;
   }
 
+  /**
+   * Adds an environment to the registry.
+   * @param environment - The name of the environment to add.
+   */
   public async addEnvironment(environment: string): Promise<void> {
     this.registry[environment] = true;
     await this.saveRegistry();
   }
 
+  /**
+   * Removes an environment from the registry.
+   * @param environment - The name of the environment to remove.
+   */
   public async removeEnvironment(environment: string): Promise<void> {
     delete this.registry[environment];
     await this.saveRegistry();
