@@ -18,7 +18,7 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "sourceMap": true,
-    "emitDeclarationOnly": true,
+    "emitDeclarationOnly": false,
     "outDir": "./dist/tsc/",
     "types": [
       "node",
@@ -30,7 +30,8 @@
     ]
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "src/cli.ts"
   ],
   "exclude": [
     "node_modules",
