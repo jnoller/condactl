@@ -8,7 +8,7 @@
   "main": "./dist/tsc/main.js",
   "types": "./dist/tsc/main.d.ts",
   "bin": {
-    "cope": "./dist/esbuild/cli.js"
+    "cope": "./dist/tsc/main.js"
   },
   "scripts": {
     "cli": "ts-node src/cli.ts",
@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@types/node": "14.0.0",
-    "commander": "7.2.0",
+    "commander": "^11.0.0",
     "del-cli": "^5.0.0",
     "dotenv": "^10.0.0",
     "express": "4.17.1",

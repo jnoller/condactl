@@ -3,14 +3,28 @@ import { RegistryManager } from './registry';
 import { Commander } from './commander';
 
 export class EnvironmentManager {
+  private static instance: EnvironmentManager;
   private registryManager: RegistryManager;
   private commander: Commander;
   private locks: { [environment: string]: boolean };
 
-  constructor() {
+  private constructor() {
     this.registryManager = new RegistryManager();
     this.commander = new Commander();
     this.locks = {};
+  }
+
+    /**
+   * example: const environmentManager = EnvironmentManager.getInstance();
+   * Returns the singleton instance of the EnvironmentManager class.
+   * If the instance does not exist, it creates a new instance.
+   * @returns The singleton instance of the EnvironmentManager class.
+   */
+  public static getInstance(): EnvironmentManager {
+    if (!EnvironmentManager.instance) {
+      EnvironmentManager.instance = new EnvironmentManager();
+    }
+    return EnvironmentManager.instance;
   }
 
   /**
@@ -91,10 +105,6 @@ export class EnvironmentManager {
 
     return environments;
   }
-
-
-
-
 
   /**
    * Creates a new environment with the specified name.
