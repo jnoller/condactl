@@ -60,12 +60,13 @@ export class EnvironmentManager {
     // Check if force refresh is enabled, delete the registry file if it is
     if (forceRefresh) {
       this.log.debug(`Force Refresh set, deleting registry: ${this.registryManager.registryPath}`);
-      await this.registryManager.removeRegistryFile();
+      await this.registryManager.purgeRegistry();
     } else {
       this.log.info(`Using existing registry: ${this.registryManager.registryPath}`);
     }
 
     environments = Object.keys(this.registryManager.getEnvironments());
+    this.log.info(`Registry contains ${environments.length} environments.`)
     if (environments.length === 0) {
       const condaCommand = 'conda';
       const args = ['env', 'list', '--json'];

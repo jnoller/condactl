@@ -33,19 +33,29 @@ export class Commander {
 
   private resolveBin(environment: string | null, cmd: string): string {
     this.log?.debug(`Resolving binary: ${cmd}`);
-    let finalcmd = cmd;
-    if (environment && !shelljs.which('conda')) {
-      throw new ShellCommandError(`Cannot load command environment: Conda is not available in the current shell or $PATH`, 1);
-    } else if (!environment && !shelljs.which(cmd)) {
-      throw new ShellCommandError(`Command '${cmd}' does not exist in the current environment, shell, or $PATH`, 1);
-    } else if (environment) {
-      finalcmd = `conda activate ${environment} && ${cmd}`;
-    } else {
-      finalcmd = shelljs.which(cmd)?.toString() || cmd;
+    const resolvedConda = shelljs.which("conda");
+
+    if (environment && !resolvedConda) {
+      throw new ShellCommandError(`Cannot load command environment: Conda is not available in the current shell`, 1);
     }
-    this.log?.debug(`Resolved to: ${finalcmd}`);
-    return finalcmd;
+
+    if (environment && resolvedConda) {
+      const cmdPath = shelljs.which(cmd);
+      if (!cmdPath) {
+        throw new ShellCommandError(`Command '${cmd}' not found in environment`, 1);
+      }
+      return `${resolvedConda} activate ${environment} && ${cmdPath.toString()}`;
+    }
+
+    if (!environment) {
+      const cmdPath = shelljs.which(cmd);
+      return cmdPath?.toString() || cmd;
+    }
+
+    throw new ShellCommandError(`Unsupported condition`, 1);
   }
+
+
 
   private buildCommand(environment: string | null, cmd: string, args: string[] = []): string {
     let sanitizedEnv: string | null;
