@@ -94,7 +94,7 @@ export class EnvironmentManager {
 
   public async createEnvironment(name: string): Promise<void> {
     const condaCommand = 'conda';
-    const args = ['create', '--name', name, 'python'];
+    const args = ['create', '--name', name, '--yes'];
 
     await this.withLock(name, async () => {
       try {
@@ -109,7 +109,7 @@ export class EnvironmentManager {
 
   public async cleanEnvironment(name: string): Promise<void> {
     const condaCommand = 'conda';
-    const args = ['clean', '--name', name, '--all'];
+    const args = ['clean', '--name', name, '--all', '--yes'];
 
     await this.withLock(name, async () => {
       try {
