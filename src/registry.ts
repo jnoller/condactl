@@ -70,13 +70,18 @@ export class RegistryManager {
   public async removeRegistryFile(): Promise<void> {
     try {
       await fs.remove(this.registryPath);
-      this.log?.debug(`Registry file removed: ${this.registryPath} calling init()`);
-      await this.init(); // Re-initialize the registry
+      this.log?.debug(`Registry file removed: ${this.registryPath}`);
+      this.registry = {}; // Reset the in-memory registry to an empty object
+      await this.saveRegistry(); // Save the empty registry to a new registry file
+      if (this.log) {
+        this.log.info(`Registry file reset`);
+      }
     } catch (error) {
       console.error('Failed to remove registry file:', error);
       throw error;
     }
   }
+
 
   /**
    * Checks if the registry file exists.
