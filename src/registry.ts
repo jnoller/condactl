@@ -1,14 +1,17 @@
-import fs from 'fs/promises';
+import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { Logger } from "winston";
 
 export class RegistryManager {
   public registryPath: string;
+  public log: Logger | undefined;
   private registry: { [key: string]: boolean };
 
-  constructor(registryPath?: string) {
+  constructor(registryPath?: string, log?: Logger) {
     this.registryPath = registryPath ?? path.join(os.homedir(), '.cope', 'registry.json');
     this.registry = {};
+    this.log = log;
   }
 
   /**
@@ -18,27 +21,31 @@ export class RegistryManager {
   public async init(): Promise<void> {
     try {
       await fs.access(this.registryPath);
+      if (this.log) {
+        this.log.info(`Registry file exists: ${this.registryPath}`);
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        await this.saveRegistry(); // This will create the file with the initial state of the registry
+        await this.saveRegistry();
+        if (this.log) {
+          this.log.info(`New registry file created: ${this.registryPath}`);
+        }
       } else {
-        throw error; // If the error is not 'ENOENT', rethrow it
+        throw error;
       }
     }
+
     await this.loadRegistry();
   }
+
 
   /**
    * Loads the registry from the registry file.
    * If the file does not exist or an error occurs while reading the file, an empty registry will be used.
    */
   private async loadRegistry(): Promise<void> {
-    try {
-      const registryData = await fs.readFile(this.registryPath, 'utf-8');
-      this.registry = JSON.parse(registryData);
-    } catch (error) {
-      this.registry = {};
-    }
+    const registryData = await fs.readFile(this.registryPath, 'utf-8');
+    this.registry = JSON.parse(registryData);
   }
 
   /**
@@ -48,10 +55,26 @@ export class RegistryManager {
   private async saveRegistry(): Promise<void> {
     try {
       const registryData = JSON.stringify(this.registry, null, 2);
-      await fs.writeFile(this.registryPath, registryData, 'utf-8');
+      await fs.outputFile(this.registryPath, registryData, 'utf-8');
+      this.log?.debug(`Registry file saved to: ${this.registryPath}`);
     } catch (error) {
-      console.error('Failed to write file:', error);
-      throw error; // Re-throw the error after logging it
+      console.error('Failed to write registry file:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Removes the registry file.
+   * If an error occurs while removing the file, it will be logged and re-thrown.
+   */
+  public async removeRegistryFile(): Promise<void> {
+    try {
+      await fs.remove(this.registryPath);
+      this.log?.debug(`Registry file removed: ${this.registryPath} calling init()`);
+      await this.init(); // Re-initialize the registry
+    } catch (error) {
+      console.error('Failed to remove registry file:', error);
+      throw error;
     }
   }
 
@@ -83,6 +106,9 @@ export class RegistryManager {
   public async addEnvironment(environment: string): Promise<void> {
     this.registry[environment] = true;
     await this.saveRegistry();
+    if (this.log) {
+      this.log.info(`Environment added to registry: ${environment}`);
+    }
   }
 
   /**
@@ -92,5 +118,8 @@ export class RegistryManager {
   public async removeEnvironment(environment: string): Promise<void> {
     delete this.registry[environment];
     await this.saveRegistry();
+    if (this.log) {
+      this.log.info(`Environment removed from registry: ${environment}`);
+    }
   }
 }

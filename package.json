@@ -25,13 +25,16 @@
     "postinstall": "chmod +x ./dist/tsc/cli.js"
   },
   "dependencies": {
+    "@types/fs-extra": "^11.0.1",
     "@types/node": "14.0.0",
     "commander": "^11.0.0",
     "del-cli": "^5.0.0",
     "dotenv": "^10.0.0",
     "express": "4.17.1",
+    "fs-extra": "^11.1.1",
     "shelljs": "0.8.4",
-    "shelljs-exec-proxy": "^0.2.1"
+    "shescape": "^1.7.2",
+    "winston": "^3.10.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.17",
