@@ -24,12 +24,25 @@ program
   });
 
 program
-  .command('create <name>')
+  .command('clean')
+  .description('Clean all environments')
+  .action(async () => {
+    console.log('Cleaning all environments...');
+    try {
+      await environmentManager.cleanEnvironment();
+      console.log('All environments cleaned.');
+    } catch (error) {
+      console.error('Failed to clean environments:', error);
+    }
+  });
+
+program
+  .command('create <name> [path]')
   .description('Create a new environment')
-  .action(async (name) => {
+  .action(async (name, path) => {
     console.log(`Creating environment ${name}...`);
     try {
-      await environmentManager.createEnvironment(name);
+      await environmentManager.createEnvironment(name, path);
       console.log(`Environment ${name} created.`);
     } catch (error) {
       console.error(`Failed to create environment ${name}:`, error);
@@ -37,106 +50,28 @@ program
   });
 
 program
-  .command('clean <name>')
-  .description('Clean an environment')
-  .action(async (name) => {
-    console.log(`Cleaning environment ${name}...`);
+  .command('remove <nameOrPath>')
+  .description('Remove an environment')
+  .action(async (nameOrPath) => {
+    console.log(`Removing environment ${nameOrPath}...`);
     try {
-      await environmentManager.cleanEnvironment(name);
-      console.log(`Environment ${name} cleaned.`);
+      await environmentManager.removeEnvironment(nameOrPath);
+      console.log(`Environment ${nameOrPath} removed.`);
     } catch (error) {
-      console.error(`Failed to clean environment ${name}:`, error);
+      console.error(`Failed to remove environment ${nameOrPath}:`, error);
     }
   });
 
 program
-  .command('compare <env1> <env2>')
-  .description('Compare two environments')
-  .action(async (env1, env2) => {
-    console.log(`Comparing environments ${env1} and ${env2}...`);
-    try {
-      const comparison = await environmentManager.compareEnvironments(env1, env2);
-      console.log(comparison);
-    } catch (error) {
-      console.error(`Failed to compare environments ${env1} and ${env2}:`, error);
-    }
-  });
-
-program
-  .command('config <name> [value]')
-  .description('Configure an environment')
-  .action(async (name, value) => {
-    console.log(`Configuring environment ${name}...`);
-    try {
-      await environmentManager.environmentConfig(name, value);
-      console.log(`Environment ${name} configured.`);
-    } catch (error) {
-      console.error(`Failed to configure environment ${name}:`, error);
-    }
-  });
-
-program
-  .command('details <name>')
-  .description('Get details of an environment')
-  .action(async (name) => {
-    console.log(`Getting details for environment ${name}...`);
-    try {
-      const details = await environmentManager.environmentDetails(name);
-      console.log(`Details for environment ${name}:`, details);
-    } catch (error) {
-      console.error(`Failed to get details for environment ${name}:`, error);
-    }
-  });
-
-program
-  .command('rename <oldName> <newName>')
-  .description('Rename an environment')
-  .action(async (oldName, newName) => {
-    console.log(`Renaming environment ${oldName} to ${newName}...`);
-    try {
-      await environmentManager.renameEnvironment(oldName, newName);
-      console.log(`Environment ${oldName} renamed to ${newName}.`);
-    } catch (error) {
-      console.error(`Failed to rename environment ${oldName} to ${newName}:`, error);
-    }
-  });
-
-program
-  .command('update <name> [args...]')
-  .description('Update an environment')
-  .action(async (name, args) => {
-    console.log(`Updating environment ${name}...`);
-    try {
-      await environmentManager.updateEnvironment(name, args);
-      console.log(`Environment ${name} updated.`);
-    } catch (error) {
-      console.error(`Failed to update environment ${name}:`, error);
-    }
-  });
-
-program
-  .command('delete <name>')
-  .description('Delete an environment')
-  .action(async (name) => {
-    console.log(`Deleting environment ${name}...`);
-    try {
-      await environmentManager.deleteEnvironment(name);
-      console.log(`Environment ${name} deleted.`);
-    } catch (error) {
-      console.error(`Failed to delete environment ${name}:`, error);
-    }
-  });
-
-program
-  .command('install <environment> <packageName>')
+  .command('install <environment> <packageOrFile>')
   .description('Install a package in an environment')
-  .action(async (environment, packageName) => {
-    console.log(`Installing package ${packageName} in environment ${environment}...`);
+  .action(async (environment, packageOrFile) => {
+    console.log(`Installing package ${packageOrFile} in environment ${environment}...`);
     try {
-      await environmentManager.installPackage(environment, packageName);
-      console.log(`Package ${packageName} installed in environment ${environment}.`);
+      await environmentManager.installPackage(environment, packageOrFile);
+      console.log(`Package ${packageOrFile} installed in environment ${environment}.`);
     } catch (error) {
-      console.error(`Failed to install package ${packageName} in environment ${environment}:`, error);
+      console.error(`Failed to install package ${packageOrFile} in environment ${environment}:`, error);
     }
   });
 
