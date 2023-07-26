@@ -3,6 +3,7 @@ import { RegistryManager } from './registry';
 import createLogger from './logging';
 import { Logger } from 'winston';
 
+//todo - use this.condabin instead of redeclaring condaCommand
 export class EnvironmentManager {
   private static instance: EnvironmentManager;
   private registryManager: RegistryManager;
@@ -107,13 +108,15 @@ export class EnvironmentManager {
     });
   }
 
+  // todo: clean doesn't seem to accept the --name flag, we need to activate the environment first
+  // exec(env, 'conda', args);
   public async cleanEnvironment(name: string): Promise<void> {
     const condaCommand = 'conda';
     const args = ['clean', '--name', name, '--all', '--yes'];
 
     await this.withLock(name, async () => {
       try {
-        const result = await this.commander.exec(null, condaCommand, args);
+        const result = await this.commander.exec(name, condaCommand, args);
         this.handleCommandResult(condaCommand, result);
       } catch (error) {
         this.log.error(`Failed to clean environment '${name}': ${error}`);
@@ -121,7 +124,8 @@ export class EnvironmentManager {
       }
     });
   }
-
+  // TODO: fix compare to accept the environment and file to compare against vs 2 environments
+  // Should we handle doing the activate and then a compare?
   public async compareEnvironments(env1: string, env2: string): Promise<string> {
     const condaCommand = 'conda';
     const args = ['compare', '--env1', env1, '--env2', env2];
@@ -142,7 +146,7 @@ export class EnvironmentManager {
 
   public async environmentConfig(name: string, value?: string): Promise<void> {
     const condaCommand = 'conda';
-    const args = ['config', '--env', '--add', 'env_prompt', value ? `'${value}'` : ''];
+    const args = ['config', `--env ${name}`, '--add', 'env_prompt', value ? `'${value}'` : ''];
 
     await this.withLock(name, async () => {
       try {
@@ -213,15 +217,13 @@ export class EnvironmentManager {
       try {
         const result = await this.commander.exec(null, condaCommand, args);
         this.handleCommandResult(condaCommand, result);
-
-        // TODO: Drop the lock and force a refresh of the registry after successful listing
       } catch (error) {
         this.log.error(`Failed to list environments: ${error}`);
         throw error;
       }
     });
   }
-
+  // todo: add delete to cli (do we need --yes?)
   public async deleteEnvironment(name: string): Promise<void> {
     const condaCommand = 'conda';
     const args = ['env', 'remove', '--name', name];
@@ -230,8 +232,6 @@ export class EnvironmentManager {
       try {
         const result = await this.commander.exec(null, condaCommand, args);
         this.handleCommandResult(condaCommand, result);
-
-        // TODO: Drop the lock and force a refresh of the registry after successful deletion
       } catch (error) {
         this.log.error(`Failed to delete environment '${name}': ${error}`);
         throw error;
