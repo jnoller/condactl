@@ -1,7 +1,7 @@
-// Import the EnvironmentManager class from the environmentManager module
 import { EnvironmentManager } from './environmentManager';
-import './cli';
+import { Commander } from './commander';
+import { RegistryManager } from './registry';
 
-// Export the EnvironmentManager class as a named export
 export { EnvironmentManager };
-
+export { Commander };
+export { RegistryManager };
