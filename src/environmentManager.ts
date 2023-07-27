@@ -305,6 +305,9 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
    * @throws Will throw an error if the 'conda install' command fails.
    * @returns {Promise<void>} A Promise that resolves when the package installation is complete.
    */
+
+  // TODO: add support for specifying the package version
+  // in the file, the versions should be defined, so we only need it if it's a package name
   public async installPackage(environment: string, packageOrFile: string): Promise<void> {
     const args = ['install', '--name', environment, '-y', '--json'];
 
