@@ -16,7 +16,7 @@ export class EnvironmentManager {
   private constructor(log?: Logger) {
     this.log = log || createLogger();
     this.registryManager = new RegistryManager(undefined, this.log);
-    this.commander = new Commander(this.log);
+    this.commander = new Commander(null, this.log);
     this.locks = {};
     this.condaCommand = 'conda';
   }
