@@ -5,12 +5,12 @@ import shescape from 'shescape';
 /**
  * Class representing a command executor.
  */
-export class Commander {
+export class CLIControl {
   private shell: string;
   private log?: Logger;
 
   /**
-   * Create a new commander.
+   * Create a new clicontrol.
    * @param {string|null} shell - The shell to use for commands. Falls back to environment vars or "/bin/bash".
    * @param {Logger} log - A Winston logger instance.
    */

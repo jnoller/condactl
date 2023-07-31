@@ -1,4 +1,4 @@
-import { Commander, ShellCommandError } from './commander';
+import { CLIControl, ShellCommandError } from './clicontrol';
 import { RegistryManager } from './registry';
 import createLogger from './logging';
 import { Logger } from 'winston';
@@ -8,7 +8,7 @@ import * as path from 'path';
 export class EnvironmentManager {
   private static instance: EnvironmentManager;
   private registryManager: RegistryManager;
-  private commander: Commander;
+  private clicontrol: CLIControl;
   private locks: { [environment: string]: boolean };
   private log: Logger;
   private condaCommand: string;
@@ -16,7 +16,7 @@ export class EnvironmentManager {
   private constructor(log?: Logger) {
     this.log = log || createLogger();
     this.registryManager = new RegistryManager(undefined, this.log);
-    this.commander = new Commander(null, this.log);
+    this.clicontrol = new CLIControl(null, this.log);
     this.locks = {};
     this.condaCommand = 'conda';
   }
@@ -87,7 +87,7 @@ export class EnvironmentManager {
       const args = ['env', 'list', '--json'];
       this.log.info('Registry empty, discovering environments.');
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.log.debug(`Discovery command executed successfully: ${result.stdout}`);
         const condaEnvironments = JSON.parse(result.stdout.toString())?.envs || [];
         environments = environments.concat(condaEnvironments);
@@ -129,7 +129,7 @@ public async createEnvironment(name: string, path?: string): Promise<void> {
 
   await this.withLock(name, async () => {
     try {
-      const result = await this.commander.exec(null, this.condaCommand, args);
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
     } catch (error) {
       this.log.error(`Failed to create environment '${name}': ${error}`);
@@ -152,7 +152,7 @@ public async cleanEnvironment(): Promise<void> {
   const args = ['clean', '--all', '--yes', '--json'];
 
   try {
-    const result = await this.commander.exec(null, this.condaCommand, args);
+    const result = await this.clicontrol.exec(null, this.condaCommand, args);
     this.handleCommandResult(this.condaCommand, result);
   } catch (error) {
     this.log.error(`Failed to clean environments: ${error}`);
@@ -177,7 +177,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
   const args = ['compare', '-n', environment, filePath, '--json'];
 
   try {
-    const result = await this.commander.exec(null, this.condaCommand, args);
+    const result = await this.clicontrol.exec(null, this.condaCommand, args);
     this.handleCommandResult(this.condaCommand, result);
     return result.stdout.toString();
   } catch (error) {
@@ -193,7 +193,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
 
     await this.withLock(name, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
         this.log.error(`Failed to configure environment '${name}': ${error}`);
@@ -207,7 +207,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
 
     return await this.withLock(name, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
         return result.stdout.toString();
       } catch (error) {
@@ -223,7 +223,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
     await this.withLock(oldName, async () => {
       await this.withLock(newName, async () => {
         try {
-          const result = await this.commander.exec(null, this.condaCommand, args);
+          const result = await this.clicontrol.exec(null, this.condaCommand, args);
           this.handleCommandResult(this.condaCommand, result);
         } catch (error) {
           this.log.error(`Failed to rename environment '${oldName}' to '${newName}': ${error}`);
@@ -238,7 +238,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
 
     await this.withLock(name, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, commandArgs);
+        const result = await this.clicontrol.exec(null, this.condaCommand, commandArgs);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
         this.log.error(`Failed to update environment '${name}': ${error}`);
@@ -252,7 +252,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
 
     await this.withLock(name, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
         this.log.error(`Failed to list environments: ${error}`);
@@ -283,7 +283,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
 
   await this.withLock(nameOrPath, async () => {
     try {
-      const result = await this.commander.exec(null, this.condaCommand, args);
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
     } catch (error) {
       this.log.error(`Failed to remove environment '${nameOrPath}': ${error}`);
@@ -319,7 +319,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
 
     await this.withLock(environment, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
         this.log.error(`Failed to install package '${packageOrFile}' in environment '${environment}': ${error}`);
@@ -333,7 +333,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
 
     await this.withLock(environment, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
         this.log.error(`Failed to uninstall package '${packageName}' from environment '${environment}': ${error}`);
@@ -347,7 +347,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
 
     return await this.withLock(name, async () => {
       try {
-        const result = await this.commander.exec(null, this.condaCommand, args);
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
         return result.stdout.toString();
       } catch (error) {
@@ -361,7 +361,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
     const args = ['search', name];
 
     try {
-      const result = await this.commander.exec(null, this.condaCommand, args);
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString();
     } catch (error) {
@@ -374,7 +374,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
     const args = ['--version'];
 
     try {
-      const result = await this.commander.exec(null, this.condaCommand, args);
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString().trim();
     } catch (error) {
@@ -387,7 +387,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
     const args = ['run', '-n', 'myenv', 'bash', '-c', command];
 
     try {
-      const result = await this.commander.exec(environment, this.condaCommand, args);
+      const result = await this.clicontrol.exec(environment, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString().trim();
     } catch (error) {
