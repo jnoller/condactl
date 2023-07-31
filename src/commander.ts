@@ -84,19 +84,28 @@ export class Commander {
    * @return {ShellString} The ShellString object representing the result of the command.
    * @throws Will throw a ShellCommandError if the command returns a non-zero exit code.
    */
+
   public async exec(environment: string | null, cmd: string, args: string[] = []): Promise<ShellString> {
     const finalCmd = this.buildCommand(environment, cmd, args);
     this.log?.info(`Executing command: ${finalCmd}`);
     shelljs.config.verbose = this.log?.level === "debug";
     this.log?.debug(`shelljs configuration: ${JSON.stringify(shelljs.config)}`);
 
-    const shelljsExecResult = shelljs.exec(finalCmd, { shell: this.shell, silent: !shelljs.config.verbose });
-    if (shelljsExecResult.code !== 0) {
-      throw new ShellCommandError(shelljsExecResult.stderr, shelljsExecResult.code);
-    }
-    return shelljsExecResult;
+    return new Promise((resolve, reject) => {
+      shelljs.exec(finalCmd, { async: true, shell: this.shell, silent: !shelljs.config.verbose }, (code, stdout, stderr) => {
+        if (code !== 0) {
+          reject(new ShellCommandError(stderr, code));
+        } else {
+          const shellString = new ShellString(stdout);
+          shellString.stderr = stderr;
+          shellString.code = code;
+          resolve(shellString);
+        }
+      });
+    });
   }
 }
+
 
 /**
  * Class representing an error that occurs when executing a shell command.
