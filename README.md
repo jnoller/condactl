@@ -1,26 +1,19 @@
-# COPE (COPE Operates Python Environments)
+# Conda Control (condactl)
 
-COPE is a Node/TypeScript package that provides a consistent interface for managing conda environments. It's designed
-to be easily integrated into projects that need to work with and manage conda environments. COPE can also be run in
-HTTP API and CLI modes, providing the same commands, arguments, and structure across all modes.
+Conda Control (condactl) is a Node/TypeScript package that provides a consistent interface for managing conda environments. It's designed to be easily integrated into projects that need to work with and manage conda environments. Conda Control can also be run in HTTP API and CLI modes, providing the same commands, arguments, and structure across all modes.
 
-## Installation
+Installation
+To install Conda Control, follow these steps:
 
-To install COPE, follow these steps:
+Clone the repository from https://github.com/jnoller/condactl
+Run yarn build to build the project
+Run yarn install to install the project, or yarn link to link it for development
+Usage
+The main class in Conda Control is EnvironmentManager. This class provides methods for managing conda environments, such as creating, deleting, and updating environments, installing and uninstalling packages, and more.
 
-1. Clone the repository from [https://github.com/jnoller/cope](https://github.com/jnoller/cope)
-2. Run `yarn build` to build the project
-3. Run `yarn install` to install the project, or `yarn link` to link it for development
+Here's an example of how to use the EnvironmentManager class inside of your application:
 
-## Usage
-
-The main class in COPE is `EnvironmentManager`. This class provides methods for managing conda environments, such as
-creating, deleting, and updating environments, installing and uninstalling packages, and more.
-
-Here's an example of how to use the `EnvironmentManager` class inside of your application:
-
-```
-import { EnvironmentManager } from 'cope';
+import { EnvironmentManager } from 'condactl';
 
 const manager = EnvironmentManager.getInstance();
 
@@ -36,9 +29,8 @@ console.log(packages);
 
 // Delete the environment
 await manager.deleteEnvironment('myenv');
-```
 
-The same command structure and inteface is also exposed when running COPE in cli mode:
+The same command structure and inteface is also exposed when running condactl in cli mode:
 
 ```
 > yarn build && yarn link
@@ -47,10 +39,10 @@ $ tsc -p tsconfig.json && yarn postinstall
 $ chmod +x ./dist/tsc/cli.js
 ✨  Done in 0.94s.
 yarn link v1.22.19
-success Registered "cope".
-info You can now run `yarn link "cope"` in the projects where you want to use this package and it will be used instead.
+success Registered "condactl".
+info You can now run `yarn link "condactl"` in the projects where you want to use this package and it will be used instead.
 ✨  Done in 0.02s.
-> cope discover
+> condactl discover
 Discovering environments...
 ...
 Discovered environments: [
@@ -60,6 +52,9 @@ Discovered environments: [
   '/opt/homebrew/anaconda3/envs/huggingf'
 ]
 ```
+
+
+
 ### Electron-IPC example
 For electron usage, expose a back-end IPC service in your `main` directory (usually preload.js) like the following:
 ```
@@ -105,20 +100,20 @@ async function createEnvironment(name) {
 }
 ```
 
-As environment manager and the other COPE functionality is designed for composability it omits more complex buisness or application dependent logic. For example an application may want to support a `migrate` operation. It may require a clean, rename or other operations as well as maybe custom cloud/disk/whatever code. Your `migrate` operation might look like this:
+As environment manager and the other condactl functionality is designed for composability it omits more complex buisness or application dependent logic. For example an application may want to support a `migrate` operation. It may require a clean, rename or other operations as well as maybe custom cloud/disk/whatever code. Your `migrate` operation might look like this:
 
 ```
 public migrate() {
   confirm the operation
-  use cope to lock and clean the environment
+  use condactl to lock and clean the environment
   $your custom compression/cross-machine logic
-  use cope to confirm/compare the migration
+  use condactl to confirm/compare the migration
 }
 ```
 
 ## Environment Manager
 
-The `EnvironmentManager` class in COPE provides the following methods for managing conda environments:
+The `EnvironmentManager` class in condactl provides the following methods for managing conda environments:
 
 - `createEnvironment(name: string): Promise<void>`: Creates a new environment with the given name.
 - `deleteEnvironment(name: string): Promise<void>`: Deletes the environment with the given name.
@@ -141,7 +136,7 @@ These methods can be used to perform a wide range of tasks, from basic environme
 
 ## Registry Manager & Caching
 
-The `RegistryManager` class in COPE provides functionality for managing a registry of conda environments. This registry is stored in a JSON file and can be used to cache information about environments, improving the performance of operations that need to access this information.
+The `RegistryManager` class in condactl provides functionality for managing a registry of conda environments. This registry is stored in a JSON file and can be used to cache information about environments, improving the performance of operations that need to access this information.
 
 Methods provided by the `RegistryManager` class:
 
@@ -154,11 +149,11 @@ Methods provided by the `RegistryManager` class:
 - `addEnvironment(environment: string): Promise<void>`: Adds an environment to the registry.
 - `removeEnvironment(environment: string): Promise<void>`: Removes an environment from the registry.
 
-The registry is stored in a file located at `~/.cope/registry.json` by default, but a different location can be specified when creating a `RegistryManager` instance.
+The registry is stored in a file located at `~/.condactl/registry.json` by default, but a different location can be specified when creating a `RegistryManager` instance.
 
 ## Commander
 
-Commander is the foundation of COPE, providing the ability to execute shell commands cleanly.
+Commander is the foundation of condactl, providing the ability to execute shell commands cleanly.
 
 Methods provided by the `Commander` class:
 
@@ -180,12 +175,12 @@ arguments. This ensures that commands are executed safely and correctly, regardl
 
 ## Complete/Outstanding functionality
 
-* :white_check_mark: Environment discovery / `cope discover`
-* :white_check_mark: Create environment / `cope create $name`
-* :white_check_mark: Delete Environment / `cope delete $name`
+* :white_check_mark: Environment discovery / `condactl discover`
+* :white_check_mark: Create environment / `condactl create $name`
+* :white_check_mark: Delete Environment / `condactl delete $name`
 * :white_check_mark: Environment list caching/update logic
 * :white_check_mark: Command and argument escape/quoting
-* :white_check_mark: CLI mode (`yarn link && cope`)
+* :white_check_mark: CLI mode (`yarn link && condactl`)
 * :white_check_mark: Centralized logger / winston configuration
 * :white_check_mark: Operation locking per-environment
 * :white_check_mark: Return Shelljs `ShellString` types from exec() for string/grep/cat methods
@@ -208,4 +203,4 @@ To run the Jest tests, use the command `yarn test`. The tests are located in the
 
 ## License
 
-COPE is distributed under the BSD 3-Clause License.
+condactl is distributed under the BSD 3-Clause License.

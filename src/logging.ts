@@ -4,7 +4,7 @@ import path from "path";
 
 const createLogger = (level?: string, logsDir?: string): Logger => {
   const defaultLevel = level || "debug";
-  const defaultLogsDir = logsDir || path.join(os.homedir(), ".cope", "logs");
+  const defaultLogsDir = logsDir || path.join(os.homedir(), ".condctl", "logs");
 
   const format = winston.format.combine(
     winston.format.timestamp({
