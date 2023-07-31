@@ -9,7 +9,7 @@ export class RegistryManager {
   private registry: { [key: string]: boolean };
 
   constructor(registryPath?: string, log?: Logger) {
-    this.registryPath = registryPath ?? path.join(os.homedir(), '.cope', 'registry.json');
+    this.registryPath = registryPath ?? path.join(os.homedir(), '.condactl', 'registry.json');
     this.registry = {};
     this.log = log;
   }

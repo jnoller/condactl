@@ -1,14 +1,14 @@
 {
-  "name": "cope",
+  "name": "condactl",
   "version": "0.1.1",
-  "description": "COPE (COPE Operates Python Environments)",
+  "description": "Conda Control - a node/typescript for managing conda environments",
   "author": "Jesse Noller <jnoller@gmail.com>",
-  "repository": "https://github.com/jnoller/cope",
+  "repository": "https://github.com/jnoller/condactl",
   "license": "BSD-3-Clause",
   "main": "./dist/tsc/main.js",
   "types": "./dist/tsc/main.d.ts",
   "bin": {
-    "cope": "./dist/tsc/cli.js"
+    "condactl": "./dist/tsc/cli.js"
   },
   "scripts": {
     "cli": "ts-node src/cli.ts",
