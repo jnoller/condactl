@@ -2,6 +2,7 @@ import { CLIControl, ShellCommandError } from './clicontrol';
 import { RegistryManager } from './registry';
 import createLogger from './logging';
 import { Logger } from 'winston';
+import { CONDA_COMMAND, ENABLE_LOGGING, LOG_LEVEL, REGISTRY_PATH } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -10,15 +11,19 @@ export class EnvironmentManager {
   private registryManager: RegistryManager;
   private clicontrol: CLIControl;
   private locks: { [environment: string]: boolean };
-  private log: Logger;
+  private log: Logger | undefined;
   private condaCommand: string;
 
-  private constructor(log?: Logger) {
-    this.log = log || createLogger();
-    this.registryManager = new RegistryManager(undefined, this.log);
-    this.clicontrol = new CLIControl(null, this.log);
-    this.locks = {};
-    this.condaCommand = 'conda';
+  private constructor(log: Logger | undefined) {
+      if (ENABLE_LOGGING) {
+          this.log = log || createLogger(LOG_LEVEL);
+      } else {
+          this.log = undefined;
+      }
+      this.registryManager = new RegistryManager(REGISTRY_PATH, this.log);
+      this.clicontrol = new CLIControl(null, this.log);
+      this.locks = {};
+      this.condaCommand = CONDA_COMMAND;
   }
 
   public static getInstance(log?: Logger): EnvironmentManager {
@@ -75,33 +80,33 @@ export class EnvironmentManager {
     await this.registryManager.init();
     // Check if force refresh is enabled, delete the registry file if it is
     if (forceRefresh) {
-      this.log.debug(`Force Refresh set, deleting registry: ${this.registryManager.registryPath}`);
+      this.log?.debug(`Force Refresh set, deleting registry: ${this.registryManager.registryPath}`);
       await this.registryManager.purgeRegistry();
     } else {
-      this.log.info(`Using existing registry: ${this.registryManager.registryPath}`);
+      this.log?.info(`Using existing registry: ${this.registryManager.registryPath}`);
     }
 
     environments = Object.keys(this.registryManager.getEnvironments());
-    this.log.info(`Registry contains ${environments.length} environments.`)
+    this.log?.info(`Registry contains ${environments.length} environments.`)
     if (environments.length === 0) {
       const args = ['env', 'list', '--json'];
-      this.log.info('Registry empty, discovering environments.');
+      this.log?.info('Registry empty, discovering environments.');
       try {
         const result = await this.clicontrol.exec(null, this.condaCommand, args);
-        this.log.debug(`Discovery command executed successfully: ${result.stdout}`);
+        this.log?.debug(`Discovery command executed successfully: ${result.stdout}`);
         const condaEnvironments = JSON.parse(result.stdout.toString())?.envs || [];
         environments = environments.concat(condaEnvironments);
         environments = environments.filter(env => env !== '');
-        this.log.info(`Discovered environments: ${environments}`);
+        this.log?.info(`Discovered environments: ${environments}`);
         for (const env of environments) {
           await this.registryManager.addEnvironment(env);
         }
       } catch (error) {
-        this.log.error(`Failed to discover environments: ${error}`);
+        this.log?.error(`Failed to discover environments: ${error}`);
         throw error;
       }
     } else {
-      this.log.info(`Using cached environments: ${environments}`);
+      this.log?.info(`Using cached environments: ${environments}`);
     }
 
     return environments;
@@ -132,7 +137,7 @@ public async createEnvironment(name: string, path?: string): Promise<void> {
       const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
     } catch (error) {
-      this.log.error(`Failed to create environment '${name}': ${error}`);
+      this.log?.error(`Failed to create environment '${name}': ${error}`);
       throw error;
     }
   });
@@ -155,7 +160,7 @@ public async cleanEnvironment(): Promise<void> {
     const result = await this.clicontrol.exec(null, this.condaCommand, args);
     this.handleCommandResult(this.condaCommand, result);
   } catch (error) {
-    this.log.error(`Failed to clean environments: ${error}`);
+    this.log?.error(`Failed to clean environments: ${error}`);
     throw error;
   }
 }
@@ -181,7 +186,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
     this.handleCommandResult(this.condaCommand, result);
     return result.stdout.toString();
   } catch (error) {
-    this.log.error(`Failed to compare environment '${environment}' with file '${filePath}': ${error}`);
+    this.log?.error(`Failed to compare environment '${environment}' with file '${filePath}': ${error}`);
     throw error;
   }
 }
@@ -196,7 +201,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
         const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
-        this.log.error(`Failed to configure environment '${name}': ${error}`);
+        this.log?.error(`Failed to configure environment '${name}': ${error}`);
         throw error;
       }
     });
@@ -211,7 +216,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
         this.handleCommandResult(this.condaCommand, result);
         return result.stdout.toString();
       } catch (error) {
-        this.log.error(`Failed to get details for environment '${name}': ${error}`);
+        this.log?.error(`Failed to get details for environment '${name}': ${error}`);
         throw error;
       }
     });
@@ -226,7 +231,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
           const result = await this.clicontrol.exec(null, this.condaCommand, args);
           this.handleCommandResult(this.condaCommand, result);
         } catch (error) {
-          this.log.error(`Failed to rename environment '${oldName}' to '${newName}': ${error}`);
+          this.log?.error(`Failed to rename environment '${oldName}' to '${newName}': ${error}`);
           throw error;
         }
       });
@@ -241,7 +246,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
         const result = await this.clicontrol.exec(null, this.condaCommand, commandArgs);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
-        this.log.error(`Failed to update environment '${name}': ${error}`);
+        this.log?.error(`Failed to update environment '${name}': ${error}`);
         throw error;
       }
     });
@@ -255,7 +260,7 @@ public async compareEnvironment(environment: string, filePath: string): Promise<
         const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
-        this.log.error(`Failed to list environments: ${error}`);
+        this.log?.error(`Failed to list environments: ${error}`);
         throw error;
       }
     });
@@ -286,7 +291,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
       const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
     } catch (error) {
-      this.log.error(`Failed to remove environment '${nameOrPath}': ${error}`);
+      this.log?.error(`Failed to remove environment '${nameOrPath}': ${error}`);
       throw error;
     }
   });
@@ -322,7 +327,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
         const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
-        this.log.error(`Failed to install package '${packageOrFile}' in environment '${environment}': ${error}`);
+        this.log?.error(`Failed to install package '${packageOrFile}' in environment '${environment}': ${error}`);
         throw error;
       }
     });
@@ -336,7 +341,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
         const result = await this.clicontrol.exec(null, this.condaCommand, args);
         this.handleCommandResult(this.condaCommand, result);
       } catch (error) {
-        this.log.error(`Failed to uninstall package '${packageName}' from environment '${environment}': ${error}`);
+        this.log?.error(`Failed to uninstall package '${packageName}' from environment '${environment}': ${error}`);
         throw error;
       }
     });
@@ -351,7 +356,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
         this.handleCommandResult(this.condaCommand, result);
         return result.stdout.toString();
       } catch (error) {
-        this.log.error(`Failed to list packages in environment '${name}': ${error}`);
+        this.log?.error(`Failed to list packages in environment '${name}': ${error}`);
         throw error;
       }
     });
@@ -365,7 +370,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString();
     } catch (error) {
-      this.log.error(`Failed to search for package '${name}': ${error}`);
+      this.log?.error(`Failed to search for package '${name}': ${error}`);
       throw error;
     }
   }
@@ -378,7 +383,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString().trim();
     } catch (error) {
-      this.log.error(`Failed to get Conda version: ${error}`);
+      this.log?.error(`Failed to get Conda version: ${error}`);
       throw error;
     }
   }
@@ -391,7 +396,7 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString().trim();
     } catch (error) {
-      this.log.error(`Failed to run command '${command}' inside Conda environment: ${error}`);
+      this.log?.error(`Failed to run command '${command}' inside Conda environment: ${error}`);
       throw error;
     }
   }

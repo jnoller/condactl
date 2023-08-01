@@ -1,6 +1,8 @@
 import shelljs, { ShellString } from 'shelljs';
 import { Logger } from "winston";
 import shescape from 'shescape';
+import { DEFAULT_SHELL } from './config';
+
 
 /**
  * Class representing a command executor.
@@ -15,7 +17,7 @@ export class CLIControl {
    * @param {Logger} log - A Winston logger instance.
    */
   constructor(shell?: string | null, log?: Logger) {
-    this.shell = shell || process.env.SHELL || process.env.ComSpec || "/bin/bash";
+    this.shell = shell || DEFAULT_SHELL;
     this.log = log;
   }
 
