@@ -1,7 +1,7 @@
 import { EnvironmentManager } from './environmentManager';
-import { Commander } from './commander';
+import { CLIControl } from './clicontrol';
 import { RegistryManager } from './registry';
 
 export { EnvironmentManager };
-export { Commander };
+export { CLIControl };
 export { RegistryManager };

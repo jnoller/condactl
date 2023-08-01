@@ -151,11 +151,11 @@ Methods provided by the `RegistryManager` class:
 
 The registry is stored in a file located at `~/.condactl/registry.json` by default, but a different location can be specified when creating a `RegistryManager` instance.
 
-## Commander
+## CLIControl
 
-Commander is the foundation of condactl, providing the ability to execute shell commands cleanly.
+CLIControl is the foundation of condactl, providing the ability to execute shell commands cleanly.
 
-Methods provided by the `Commander` class:
+Methods provided by the `CLIControl` class:
 
 - `sanitizeStr(str: string): string`: Sanitizes a string to make it safe to use in a shell command.
 - `sanitizeArray(args: string[]): string[]`: Sanitizes an array of strings to make them safe to use in a shell command.
@@ -167,10 +167,10 @@ Methods provided by the `Commander` class:
   an environment is specified, the command is run in that environment. The returned `ShellString` object contains the
   output of the command (`stdout`), any error message (`stderr`), and the exit code (`code`).
 
-The `Commander` class also includes a `ShellCommandError` class, which is used to represent errors that occur when
+The `CLIControl` class also includes a `ShellCommandError` class, which is used to represent errors that occur when
 executing shell commands.
 
-The `Commander` class uses the `shelljs` package to execute commands, and the `shescape` package to sanitize command
+The `CLIControl` class uses the `shelljs` package to execute commands, and the `shescape` package to sanitize command
 arguments. This ensures that commands are executed safely and correctly, regardless of the platform or shell being used.
 
 ## Complete/Outstanding functionality

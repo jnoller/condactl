@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
-import path from 'path';
-import os from 'os';
 import { Logger } from "winston";
+import { REGISTRY_PATH } from './config';
 
 export class RegistryManager {
   public registryPath: string;
@@ -9,7 +8,7 @@ export class RegistryManager {
   private registry: { [key: string]: boolean };
 
   constructor(registryPath?: string, log?: Logger) {
-    this.registryPath = registryPath ?? path.join(os.homedir(), '.condactl', 'registry.json');
+    this.registryPath = registryPath ?? REGISTRY_PATH;
     this.registry = {};
     this.log = log;
   }
