@@ -311,14 +311,14 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
    * @returns {Promise<void>} A Promise that resolves when the package installation is complete.
    */
 
-  // TODO: add support for specifying the package version
   // in the file, the versions should be defined, so we only need it if it's a package name
-  public async installPackage(environment: string, packageOrFile: string): Promise<void> {
+  public async installPackage(environment: string, packageOrFile: string, version?: string): Promise<void> {
     const args = ['install', '--name', environment, '-y', '--json'];
 
     if (path.isAbsolute(packageOrFile)) {
       args.push('--file', packageOrFile);
-    } else {
+    } else { 
+      packageOrFile = version? `${packageOrFile}=${version}`: packageOrFile;
       args.push(packageOrFile);
     }
 
@@ -347,8 +347,28 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
     });
   }
 
-  public async listPackages(name: string): Promise<string> {
+  public async updatePackage(environment: string, packageName: string, version?: string): Promise<void> {
+
+    packageName = version? `${packageName}=${version}`: packageName;
+
+    const args = ['update', '--name', environment, packageName, '--yes'];
+
+    await this.withLock(environment, async () => {
+      try {
+        const result = await this.clicontrol.exec(null, this.condaCommand, args);
+        this.handleCommandResult(this.condaCommand, result);
+      } catch (error) {
+        this.log?.error(`Failed to update package '${packageName}:${version}' from environment '${environment}': ${error}`);
+        throw error;
+      }
+    });
+  }
+
+  public async listPackages(name: string, asJson=false): Promise<string> {
     const args = ['list', '--name', name];
+    if(asJson) {
+      args.push('--json');
+    }
 
     return await this.withLock(name, async () => {
       try {
@@ -397,6 +417,32 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
       return result.stdout.toString().trim();
     } catch (error) {
       this.log?.error(`Failed to run command '${command}' inside Conda environment: ${error}`);
+      throw error;
+    }
+  }
+
+  public async exportEnvironment(name: string): Promise<string> {
+    const args = ['env', 'export', '--name', name];
+
+    try {
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
+      this.handleCommandResult(this.condaCommand, result);
+      return result.stdout.toString();
+    } catch (error) {
+      this.log?.error(`Failed export environment '${name}': ${error}`);
+      throw error;
+    }
+  }
+
+  public async condaInfo(): Promise<string> {
+    const args = ['info', '--json'];
+
+    try {
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
+      this.handleCommandResult(this.condaCommand, result);
+      return result.stdout.toString();
+    } catch (error) {
+      this.log?.error(`Failed to get conda info '${name}': ${error}`);
       throw error;
     }
   }
