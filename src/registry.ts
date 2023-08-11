@@ -1,84 +1,98 @@
-import fs from 'fs-extra';
-import { Logger } from "winston";
-import { REGISTRY_PATH } from './config';
+import Loki from 'lokijs';
+import { Logger } from 'winston';
 
 export class RegistryManager {
-  public registryPath: string;
-  public log: Logger | undefined;
-  private registry: { [key: string]: boolean };
+
+  private db: Loki;
+  private environments: Loki.Collection<Environment>;
+  private responses: Loki.Collection<Response>;
+  private log?: Logger;
 
   constructor(registryPath?: string, log?: Logger) {
-    this.registryPath = registryPath ?? REGISTRY_PATH;
-    this.registry = {};
+    this.db = new Loki(registryPath || 'registry.db');
+    this.environments = this.db.addCollection('environments');
+    this.responses = this.db.addCollection('responses');
+    this.loadFromDisk();
     this.log = log;
   }
 
-  public async init(): Promise<void> {
-    try {
-      await fs.access(this.registryPath);
-      this.log?.info(`Registry file exists: ${this.registryPath}`);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        await this.saveRegistry();
-        this.log?.info(`No registry file, creating: ${this.registryPath}`);
-      } else {
-        throw error;
-      }
-    }
-
-    await this.loadRegistry();
+  public getEnvironments(): Environment[] {
+    return this.environments.find();
   }
 
-  private async loadRegistry(): Promise<void> {
-    const registryData = await fs.readFile(this.registryPath, 'utf-8');
-    this.registry = JSON.parse(registryData);
+  public async addEnvironment(name: string): Promise<void> {
+    const env = { name };
+    this.environments.insert(env);
+    this.cacheResponse('environments', this.getEnvironments());
+    this.saveToDisk();
+    this.log?.debug(`RegistryManager: added environment ${name} to registry.`);
   }
 
-  private async saveRegistry(): Promise<void> {
-    try {
-      const registryData = JSON.stringify(this.registry, null, 2);
-      await fs.outputFile(this.registryPath, registryData, 'utf-8');
-      this.log?.debug(`Registry file saved to: ${this.registryPath}`);
-    } catch (error) {
-      console.error('Failed to write registry file:', error);
-      throw error;
+  public async removeEnvironment(name: string): Promise<void> {
+    const env = this.environments.findOne({name});
+    if (env) {
+      this.environments.remove(env);
     }
+    this.clearResponseCache('environments');
+    this.saveToDisk();
+    this.log?.debug(`RegistryManager: removed environment ${name} from registry.`);
+  }
+
+  public cacheResponse(key: string, response: any, env?: string): void {
+    const cached: Response = {key, response};
+    if (env) {
+      cached.env = env;
+    }
+    this.responses.insert(cached);
+    this.log?.debug(`RegistryManager: cached response for ${key} in registry.`);
+  }
+
+  public getCachedResponse(key: string, env?: string): any {
+    if (env) {
+      return this.responses.findOne({key, env});
+    }
+    return this.responses.findOne({key});
+  }
+
+  public clearResponseCache(key: string, env?: string): void {
+    if (env) {
+      this.responses.removeWhere(r => r.key === key && r.env === env);
+    } else {
+      this.responses.removeWhere(r => r.key === key);
+    }
+    this.log?.debug(`RegistryManager: cleared response cache for ${key} in registry.`);
   }
 
   public async purgeRegistry(): Promise<void> {
-    try {
-      await fs.remove(this.registryPath);
-      this.log?.debug(`Registry file removed: ${this.registryPath}`);
-      this.registry = {};
-      this.log?.info(`Registry file reset`);
-    } catch (error) {
-      console.error('Failed to remove registry file:', error);
-      throw error;
-    }
+    this.clearCache();
+    this.saveToDisk();
+    this.log?.debug(`RegistryManager: purged registry.`);
   }
 
-  public async isRegistryCreated(): Promise<boolean> {
-    try {
-      await fs.access(this.registryPath);
-      return true;
-    } catch (error) {
-      return false;
-    }
+  private clearCache() {
+    this.environments.clear();
+    this.responses.clear();
+    this.log?.debug(`RegistryManager: cleared cache in registry.`);
   }
 
-  public getEnvironments(): { [key: string]: boolean } {
-    return this.registry;
+  private async loadFromDisk() {
+    // load data from file if exists
   }
 
-  public async addEnvironment(environment: string): Promise<void> {
-    this.registry[environment] = true;
-    await this.saveRegistry();
-    this.log?.info(`Environment added to registry: ${environment}`);
+  private async saveToDisk() {
+    // save data to file
   }
 
-  public async removeEnvironment(environment: string): Promise<void> {
-    delete this.registry[environment];
-    await this.saveRegistry();
-    this.log?.info(`Environment removed from registry: ${environment}`);
-  }
 }
+
+interface Environment {
+  name: string;
+}
+
+interface Response {
+  key: string;
+  response: any;
+  env?: string;
+}
+
+export default RegistryManager;
