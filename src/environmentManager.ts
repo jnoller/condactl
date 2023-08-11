@@ -82,6 +82,7 @@ export class EnvironmentManager extends BaseManager {
     return this.execHandler(args, `Failed to create environment '${name}'`, asJson);
   }
 
+  // TODO: Add support for a config{} object for the args conda clean can take, see https://docs.conda.io/projects/conda/en/latest/commands/clean.html
   public async cleanEnvironment(asJson = true): Promise<string | object> {
     const args = ['clean', '--all', '--yes'];
     return this.execHandler(args, 'Failed to clean environments', asJson);
@@ -181,6 +182,7 @@ export class EnvironmentManager extends BaseManager {
     return this.execHandler(args, `Failed export environment '${name}'`, asJson);
   }
 
+  // TODO: Add support for a config{} object for the args conda info can take, see https://docs.conda.io/projects/conda/en/latest/commands/info.html
   public async condaInfo(asJson=true): Promise<string | object> {
     const args = ['info'];
     if(asJson) args.push('--json');
