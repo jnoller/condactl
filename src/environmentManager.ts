@@ -409,10 +409,16 @@ public async removeEnvironment(nameOrPath: string): Promise<void> {
   }
 
   public async runCommand(environment: string | null, command: string): Promise<string> {
-    const args = ['run', '-n', 'myenv', 'bash', '-c', command];
+    const args = ['run']; 
+    
+    if(environment) {
+      args.push('-n', environment);
+    }
+    
+    args.push('bash', '-c', command);
 
     try {
-      const result = await this.clicontrol.exec(environment, this.condaCommand, args);
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
       this.handleCommandResult(this.condaCommand, result);
       return result.stdout.toString().trim();
     } catch (error) {
