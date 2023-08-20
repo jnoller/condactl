@@ -143,6 +143,21 @@ public async createEnvironment(name: string, path?: string): Promise<void> {
   });
 }
 
+public async cloneEnvironment(fromEnv: string, toEnv: string): Promise<string> {
+  const args = ['create', '--clone', fromEnv, '--name', toEnv, '--yes', '--json'];
+
+  return await this.withLock(fromEnv, async () => {
+    try {
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
+      this.handleCommandResult(this.condaCommand, result);
+      return result.stdout.toString().trim();
+
+    } catch (error) {
+      this.log?.error(`Failed to create environment '${fromEnv}': ${error}`);
+      throw error;
+    }
+  });
+}
 
 /**
  * Cleans all Conda environments by removing unused packages and caches.
