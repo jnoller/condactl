@@ -1,98 +1,191 @@
-import Loki from 'lokijs';
 import { Logger } from 'winston';
+import Loki, { LokiFsAdapter, Collection } from 'lokijs';
+
+export type Package = {
+  base_url: string;
+  build_number: number;
+  build_string: string;
+  channel: string;
+  dist_name: string;
+  name: string;
+  platform: string;
+  version: string;
+};
+
+export type EnvironmentData = {
+  name: string;
+  prefix: string | "";
+  channels: string[];
+  packages: Package[];
+};
+
+export type CondaInfo = {
+  info: string;
+  config: string;
+  version: string;
+}
 
 export class RegistryManager {
-
   private db: Loki;
-  private environments: Loki.Collection<Environment>;
-  private responses: Loki.Collection<Response>;
   private log?: Logger;
+  private condaInfoCollection: Collection<CondaInfo>;
+  public registryPath: string;
 
-  constructor(registryPath?: string, log?: Logger) {
-    this.db = new Loki(registryPath || 'registry.db');
-    this.environments = this.db.addCollection('environments');
-    this.responses = this.db.addCollection('responses');
-    this.loadFromDisk();
-    this.log = log;
-  }
+  constructor(registryPath: string, log?: Logger) {
+    try{
+      this.log = log;
+      const adapter = new LokiFsAdapter();
+      this.db = new Loki(registryPath, {
+        adapter: adapter,
+        autoload: true,
+        autosave: true,
+        autosaveInterval: 4000
+      });
 
-  public getEnvironments(): Environment[] {
-    return this.environments.find();
-  }
-
-  public async addEnvironment(name: string): Promise<void> {
-    const env = { name };
-    this.environments.insert(env);
-    this.cacheResponse('environments', this.getEnvironments());
-    this.saveToDisk();
-    this.log?.debug(`RegistryManager: added environment ${name} to registry.`);
-  }
-
-  public async removeEnvironment(name: string): Promise<void> {
-    const env = this.environments.findOne({name});
-    if (env) {
-      this.environments.remove(env);
+      this.condaInfoCollection = this.db.getCollection<CondaInfo>('condaInfo');
+      if (!this.condaInfoCollection) {
+        this.condaInfoCollection = this.db.addCollection('condaInfo');
+      }
+    } catch(err) {
+      this.log?.error(`Error initializing RegistryManager: ${err}`);
+      throw err;
     }
-    this.clearResponseCache('environments');
-    this.saveToDisk();
-    this.log?.debug(`RegistryManager: removed environment ${name} from registry.`);
+    this.registryPath = registryPath;
   }
 
-  public cacheResponse(key: string, response: any, env?: string): void {
-    const cached: Response = {key, response};
-    if (env) {
-      cached.env = env;
+  public getEnvironmentCollection(environmentName: string): Collection<EnvironmentData> {
+    const envCollection = this.db.getCollection<EnvironmentData>(`env_${environmentName}`);
+    if (!envCollection) {
+      throw new Error(`getEnvironmentCollection: '${environmentName}' does not exist.`);
     }
-    this.responses.insert(cached);
-    this.log?.debug(`RegistryManager: cached response for ${key} in registry.`);
+    return envCollection;
   }
 
-  public getCachedResponse(key: string, env?: string): any {
-    if (env) {
-      return this.responses.findOne({key, env});
+  public getEnvironment(environmentName: string): EnvironmentData {
+    const envCollection = this.getEnvironmentCollection(environmentName);
+    const data = envCollection.findOne({ name: environmentName });
+    if (data) {
+      this.log?.info(`Environment '${environmentName}' retrieved successfully.`);
+      return data;
     }
-    return this.responses.findOne({key});
+    throw new Error(`getEnvironment: '${environmentName}' not found.`);
   }
 
-  public clearResponseCache(key: string, env?: string): void {
-    if (env) {
-      this.responses.removeWhere(r => r.key === key && r.env === env);
+  public getCondaInfo(): { info: CondaInfo, config: CondaInfo } | null {
+    const storedData = this.condaInfoCollection.findOne({});
+    if (storedData) {
+      this.log?.info("Conda info retrieved successfully.");
+      return {
+        info: JSON.parse(storedData.info),
+        config: JSON.parse(storedData.config)
+      };
+    }
+    throw new Error("getCondaInfo: No conda info found in the collection.");
+  }
+
+  public getEnvironmentPackages(environmentName: string): Package[] | null {
+    const envCollection = this.getEnvironmentCollection(environmentName);
+    const data = envCollection.findOne({ name: environmentName });
+    if (data && data.packages) {
+      this.log?.info(`Packages for environment '${environmentName}' retrieved successfully.`);
+      return data.packages;
+    }
+    this.log?.warn(`No packages found for environment '${environmentName}'.`);
+    return null;
+  }
+
+  // ? on add and remove, should we trigger a re-discovery of the packages?
+  public addEnvironmentPackages(environmentName: string, packages: Package[]): boolean {
+    try {
+        const envCollection = this.getEnvironmentCollection(environmentName);
+        const existingData = envCollection.findOne({ name: environmentName });
+        if (existingData) {
+            existingData.packages = packages;
+            envCollection.update(existingData);
+            this.log?.info(`Packages for environment '${environmentName}' updated successfully.`);
+        } else {
+            throw new Error(`Environment '${environmentName}' does not exist.`);
+        }
+        return true;
+    } catch (error) {
+        const err = new Error(`Error adding packages for environment '${environmentName}': ${error}`);
+        this.log?.error(err);
+        return false;
+    }
+  }
+
+  public removeEnvironmentPackages(environmentName: string): boolean {
+    try {
+      const envCollection = this.getEnvironmentCollection(environmentName);
+      const existingData = envCollection.findOne({ name: environmentName });
+      if (existingData) {
+        existingData.packages = [];
+        envCollection.update(existingData);
+        this.log?.info(`Packages for environment '${environmentName}' removed successfully.`);
+      } else {
+        throw new Error(`Environment '${environmentName}' does not exist.`);
+      }
+      return true;
+    } catch (error) {
+      const err = new Error(`Error removing packages for environment '${environmentName}': ${error}`);
+      this.log?.error(err);
+      return false;
+    }
+  }
+
+  public addEnvironment(name: string, prefix: string, channels: string[]): boolean {
+    const envCollection = this.getEnvironmentCollection(name);
+    if (envCollection.findOne({ name: name })) {
+      this.log?.warn(`Environment '${name}' already exists.`);
+      return false;
+    } try {
+      envCollection.insert({ name: name, prefix: prefix, channels: channels, packages: [] });
+      this.log?.info(`Environment '${name}' added successfully.`);
+      return true;
+    } catch (e) {
+      const err = new Error(`Error while adding environment '${name}': ${e}`);
+      this.log?.error(err);
+      throw err;
+    }
+  }
+
+  public removeEnvironment(environmentName: string): boolean {
+    try {
+      this.db.removeCollection(`env_${environmentName}`);
+      this.log?.info(`Environment '${environmentName}' removed successfully.`);
+      return true;
+    } catch (error) {
+      const err = new Error(`Error while removing environment '${environmentName}': ${error}`);
+      this.log?.error(err);
+      return false;
+    }
+  }
+
+  public listEnvironments(): string[] {
+    const environments = this.db.listCollections().filter(col => col.name.startsWith('env_')).map(col => col.name.replace('env_', ''));
+    if (environments.length) {
+      this.log?.info(`listEnvironments found: ${environments.join(', ')}`);
     } else {
-      this.responses.removeWhere(r => r.key === key);
+      this.log?.info(`listEnvironments found no environments, did you run discovery?`);
     }
-    this.log?.debug(`RegistryManager: cleared response cache for ${key} in registry.`);
+    return environments;
   }
 
-  public async purgeRegistry(): Promise<void> {
-    this.clearCache();
-    this.saveToDisk();
-    this.log?.debug(`RegistryManager: purged registry.`);
+  public isEmpty(): boolean {
+    const environments = this.listEnvironments();
+    return environments.length === 0;
   }
 
-  private clearCache() {
-    this.environments.clear();
-    this.responses.clear();
-    this.log?.debug(`RegistryManager: cleared cache in registry.`);
+  public clearRegistry(): boolean {
+    try {
+      this.db.removeCollection('condaInfo');
+      this.db.listCollections().filter(col => col.name.startsWith('env_')).forEach(col => this.db.removeCollection(col.name));
+      this.log?.info(`Registry cleared successfully.`);
+      return true;
+    } catch (e) {
+      const err = new Error(`Error while clearing registry: ${e}`);
+      this.log?.error(err);
+      return false;
+    }
   }
-
-  private async loadFromDisk() {
-    // load data from file if exists
-  }
-
-  private async saveToDisk() {
-    // save data to file
-  }
-
 }
-
-interface Environment {
-  name: string;
-}
-
-interface Response {
-  key: string;
-  response: any;
-  env?: string;
-}
-
-export default RegistryManager;

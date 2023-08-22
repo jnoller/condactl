@@ -4,6 +4,14 @@ import { CONDA_COMMAND, REGISTRY_PATH } from './config';
 import { RegistryManager } from './registry';
 import { ShellString } from 'shelljs';
 
+
+export interface JsonValue {
+  [key: string]: string | number | boolean | null | JsonArray | JsonValue;
+}
+
+export type JsonArray = Array<string | number | boolean | null | JsonValue>;
+
+
 export abstract class BaseManager {
   protected log: Logger | undefined;
   protected locks: { [environment: string]: boolean } = {};
@@ -18,6 +26,7 @@ export abstract class BaseManager {
     this.clicontrol = new CLIControl(null, this.log);
     this.registryManager = new RegistryManager(REGISTRY_PATH, this.log);
   }
+
   protected handleLock(environ: string, lock: boolean): void {
     if (this.locks[environ] === lock) throw new Error(`Lock state inconsistency for '${environ}'`);
     this.locks[environ] = lock;
@@ -44,26 +53,62 @@ export abstract class BaseManager {
     return result.stdout.toString();
   }
 
-  protected safeJSONParse(data: string): object {
+  public safeJSONParse(data: string): JsonValue {
     try {
-      return JSON.parse(data);
+      let result = JSON.parse(data);
+      result = result || {};
+      return result;
     } catch (error) {
       this.log?.error(`Invalid JSON response: ${error}`);
       throw error;
     }
   }
 
-  protected async execHandler(args: string[], errPrefix: string, asJson = true, withLock = false, key: string | null = null): Promise<string | object> {
-    if (asJson) args.push('--json');
+  public async lockedExecHandler(args: string[], errPrefix: string, asJson = true): Promise<JsonValue | string> {
+    return await this.executeWithLock(null, args, async (cmdArgs: string[]) => {
+      return await this.execHandler(cmdArgs, errPrefix, asJson);
+    });
+  }
 
+  public async execHandler(args: string[], errPrefix: string, asJson = true): Promise<JsonValue | string> {
+    if (asJson) args.push('--json');
     try {
-      const result = withLock
-        ? await this.executeWithLock(key, args, this.execCommand)
-        : await this.execCommand(args);
-      return asJson ? this.safeJSONParse(result) : result;
+      const rawresult = await this.execCommand(args);
+      if (asJson) {
+        const result = this.safeJSONParse(rawresult);
+        return result;
+      } else {
+        return rawresult;
+      }
     } catch (error) {
       this.log?.error(`${errPrefix}: ${error}`);
       throw error;
     }
+  }
+
+  public async strictJSONExecHandler(args: string[], errPrefix: string): Promise<JsonValue> {
+    return await this.execHandler(args, errPrefix, true) as JsonValue;
+  }
+
+  public async lockedStrictJSONExecHandler(args: string[], errPrefix: string): Promise<JsonValue> {
+    return await this.lockedExecHandler(args, errPrefix, true) as JsonValue;
+  }
+
+  public async getEnvironmentsFromConda(asJson: boolean): Promise<JsonValue> {
+    const args = ['env', 'list'];
+    if (asJson) args.push('--json');
+    return await this.lockedStrictJSONExecHandler(args, 'Failed to list environments');
+  }
+
+  public getEnvironmentsFromRegistry(): JsonArray {
+    return this.registryManager.listEnvironments() as JsonArray;
+  }
+
+  public async getExtendedEnvironmentInfo(environmentName: string): Promise<{name: string, prefix: string, channels: string[]}> {
+    const args = ['env', 'export', '-n', environmentName, '--json'];
+    const result = await this.lockedStrictJSONExecHandler(args, 'Failed to discover environments');
+    const channels = Array.isArray(result.channels) ? result.channels as string[] : [];
+    const prefix = typeof result.prefix === 'string' ? result.prefix : '';
+    return {name: environmentName, prefix, channels};
   }
 }

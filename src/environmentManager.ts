@@ -1,10 +1,10 @@
 import createLogger from './logging';
 import { Logger } from 'winston';
 import { CONDA_COMMAND, ENABLE_LOGGING, LOG_LEVEL, REGISTRY_PATH } from './config';
-import { BaseManager } from './basemanager';
+import { BaseManager, JsonValue, JsonArray } from './basemanager';
 import * as fs from 'fs';
-import { RegistryManager } from './registry';
-
+import { RegistryManager, EnvironmentData, Package } from './registry';
+import * as path from 'path';
 
 export class EnvironmentManager extends BaseManager {
   private static instance: EnvironmentManager;
@@ -14,189 +14,249 @@ export class EnvironmentManager extends BaseManager {
     if (ENABLE_LOGGING) {
       this.log = log || createLogger(LOG_LEVEL);
     }
-    this.registryManager = new RegistryManager(REGISTRY_PATH);
+    this.registryManager = new RegistryManager(REGISTRY_PATH, this.log);
   }
 
   public static getInstance(log?: Logger): EnvironmentManager {
-    if (!EnvironmentManager.instance)
+    if (!EnvironmentManager.instance) {
       EnvironmentManager.instance = new EnvironmentManager(log);
+    }
     return EnvironmentManager.instance;
   }
 
-  public async discoverEnvironments(forceRefresh = true): Promise<object> {
-    await this.registryManager.init();
+  public async discoverEnvironments(forceRefresh = true): Promise<boolean> {
     if (forceRefresh) {
-        this.log?.debug(`Force Refresh set, deleting registry: ${this.registryManager.registryPath}`);
-        await this.registryManager.purgeRegistry();
+      this.log?.debug(`forceRefresh true, deleting collections from registry: ${this.registryManager.registryPath}`);
+      this.registryManager.clearRegistry();
     } else {
-        this.log?.info(`Using existing registry: ${this.registryManager.registryPath}`);
-  }
-
-    let environments = this.registryManager.getEnvironments();
-    this.log?.info(`Registry contains ${Object.keys(environments).length} environments.`);
-
-    if (Object.keys(environments).length === 0) {
-        const args = ['env', 'list', '--json'];
-        this.log?.info('Registry empty, discovering environments.');
-        try {
-            const result = await this.execHandler(args, 'Failed to discover environments');
-            this.log?.debug(`Discovery command executed successfully: ${result}`);
-
-            if (typeof result === 'string') {
-                throw new Error('Invalid response from execHandler');
-            }
-
-            let resultAsJson: {envs?: string[]};
-            if (typeof result === 'string') {
-              try {
-                  resultAsJson = JSON.parse(result);
-              } catch (error) {
-                  throw new Error('Error parsing string response from execHandler into JSON.');
-              }
-          } else {
-              resultAsJson = result;
-          }
-
-            const condaEnvironments = resultAsJson?.envs || [];
-            for (const env of condaEnvironments) {
-                if(env && env !== ''){
-                    await this.registryManager.addEnvironment(env);
-                    this.log?.info(`Discovered environment: ${env}`);
-                }
-            }
-            environments = this.registryManager.getEnvironments();
-
-        } catch (error) {
-            this.log?.error(`Failed to discover environments: ${error}`);
-            throw error;
-        }
-    } else {
-        this.log?.info(`Using cached environments: ${environments}`);
+      this.log?.info(`Loaded registry / cache: ${this.registryManager.registryPath}`);
     }
 
-    return environments;
+    const environments = this.registryManager.listEnvironments();
+    if (Object.keys(environments).length === 0) {
+      this.log?.info('Registry empty, discovering environments.');
+      const args = ['env', 'list', '--json'];
+      const result = await this.lockedStrictJSONExecHandler(args, 'Failed to discover environments');
+      const condaEnvironments = Array.isArray(result['envs']) ? result['envs'] as string[] : [];
+
+      for (const env of condaEnvironments) {
+        if (env && env !== '') {
+          const envname = path.basename(env);
+          const {name, prefix, channels} = await this.getExtendedEnvironmentInfo(envname);
+          this.registryManager.addEnvironment(name, prefix, channels);
+          this.log?.info(`Environment: ${name} added to registry.`);
+        }
+      }
+    } else {
+      this.log?.info(`Using cached environments: ${JSON.stringify(environments)}`);
+      return true;
+    }
+    return true;
   }
 
-  public async createEnvironment(name: string, asJson = true): Promise<string | object> {
-    const args = ['create', '--name', name, '-y'];
-    return this.execHandler(args, `Failed to create environment '${name}'`, asJson);
+  public async createEnvironment(name: string): Promise<EnvironmentData> {
+    let args = ['create', '--name', name, '-y'];
+    try {
+      await this.lockedStrictJSONExecHandler(args, `Failed to create environment '${name}'`);
+    } catch (error) {
+      const err = new Error(`Failed to create environment '${name}': ${error}`);
+      this.log?.error(err);
+      throw err;
+    }
+
+    args = ['env', 'export', '-n', name, '--json'];
+    const jsonResult = await this.lockedStrictJSONExecHandler(args, `Failed to get environment data for '${name}'`);
+    const result = jsonResult as JsonValue;
+    const channels = Array.isArray(result['channels']) ? result['channels'] as string[] : [];
+    const prefix = typeof result['prefix'] === 'string' ? result['prefix'] : '';
+
+    this.registryManager.addEnvironment(name, prefix, channels);
+    const newEnvironment = this.registryManager.getEnvironment(name);
+
+    return newEnvironment;
   }
 
-  // TODO: Add support for a config{} object for the args conda clean can take, see https://docs.conda.io/projects/conda/en/latest/commands/clean.html
-  public async cleanEnvironment(asJson = true): Promise<string | object> {
-    const args = ['clean', '--all', '--yes'];
-    return this.execHandler(args, 'Failed to clean environments', asJson);
+  public async cloneEnvironment(name: string, newName: string): Promise<EnvironmentData> {
+    let args = ['env', '--name', newName, '--clone', name, '-y'];
+    try {
+      await this.lockedExecHandler(args, `Failed to clone environment '${name}' to '${newName}'`);
+    } catch (error) {
+      const err = new Error(`Failed to clone environment '${name}' to '${newName}': ${error}`);
+      this.log?.error(err);
+      throw err;
+    }
+
+    args = ['env', 'export', '-n', newName, '--json'];
+    const jsonResult = await this.lockedStrictJSONExecHandler(args, `Failed to get environment data for '${newName}'`);
+    const result = jsonResult as JsonValue;
+    const channels = Array.isArray(result['channels']) ? result['channels'] as string[] : [];
+    const prefix = typeof result['prefix'] === 'string' ? result['prefix'] : '';
+
+    this.registryManager.addEnvironment(newName, prefix, channels);
+    const newEnvironment = this.registryManager.getEnvironment(newName);
+
+    return newEnvironment;
+  }
+
+  public async cleanEnvironment(asJson = true, args = []): Promise<string | object> {
+    const flags: string[] = (args && args.length > 0) ? [...args, '--yes']: ['--all', '--yes'];
+    const cmd = ['clean', ...flags];
+    if (asJson) cmd.push('--json');
+    return this.execHandler(cmd, 'Failed to clean environments', asJson);
   }
 
   public async compareEnvironment(environment: string, filePath: string, asJson = true): Promise<string | object> {
     if (!fs.existsSync(filePath)) {
        throw new Error(`Cannot compare environment, file '${filePath}' does not exist`);
     }
-
     const args = ['compare', '-n', environment, filePath];
     return this.execHandler(args, `Failed to compare environment '${environment}' with file '${filePath}'`, asJson);
   }
 
-  public async environmentConfig(name: string, value?: string): Promise<void> {
-    const args = ['config', '--env', name, '--set', 'env_prompt', value || ''];
-    await this.execHandler(args, `Failed to configure environment '${name}'`);
+  public async getConfigValue(environment: string, name: string, args=[], asJson: true): Promise<JsonValue | string> {
+    const flags: string[] = args.length > 0 ? [...args, '--yes']: ['--all', '--show', name, '--yes'];
+    asJson && flags.push('--json');
+    const baseCmd = ['config', ...flags];
+    const cmd = environment ? ['env', 'config', '-n', environment, ...flags] : baseCmd;
+    return this.execHandler(cmd, `Failed to retrieve config value '${name}'`, asJson);
   }
 
-  public async renameEnvironment(oldName: string, newName: string): Promise<void> {
-      const args = ['rename', '--name', oldName, '--new', newName];
-      await this.execHandler(args, `Failed to rename environment '${oldName}' to '${newName}'`);
+  public async setConfigValue(environment: string, name: string, value: string, args=[], asJson: true): Promise<JsonValue | string> {
+    const flags: string[] = args.length > 0 ? [...args, '--yes']: ['--set', name, value, '--yes'];
+    asJson && flags.push('--json');
+    const baseCmd = ['config', ...flags];
+    const cmd = environment ? ['env', 'config', '-n', environment, ...flags] : baseCmd;
+    return this.lockedExecHandler(cmd, `Failed to set config value '${name}' to '${value}' for environment '${environment}`, asJson);
   }
 
-  public async updateEnvironment(name: string, asJson = true): Promise<string | object> {
-    const args = ['env', 'update', '--name', name, '-y'];
-    return this.execHandler(args, `Failed to update environment '${name}'`, asJson);
+  public async renameEnvironment(oldName: string, newName: string, dryRun: false): Promise<JsonValue> {
+      const args = ['rename', '-n', oldName, newName];
+      if (dryRun) {
+          args.push('--dry-run');
+          return this.strictJSONExecHandler(args, `Failed to rename environment '${oldName}' to '${newName}'`); // --json may fail
+      }
+      await this.lockedExecHandler(args, `Failed to rename environment '${oldName}' to '${newName}'`);
+      const newEnvironment = this.registryManager.getEnvironment(newName);
+      return newEnvironment as JsonValue;
   }
 
-  public async listEnvironments(asJson = true): Promise<string | object> {
-    const args = ['env', 'list'];
-    if (asJson) args.push('--json');
-
-    return this.execHandler(args, `Failed to list environments`, asJson);
-  }
-
-  public async removeEnvironment(name: string, asJson = true): Promise<string | object> {
+  public async removeEnvironment(name: string, asJson = true): Promise<boolean> {
     const args = ['env', 'remove', '--name', name, '-y'];
-    if (asJson) args.push('--json');
-
-    return this.execHandler(args, `Failed to remove environment '${name}'`, asJson);
+    await this.lockedExecHandler(args, `Failed to remove environment '${name}'`, asJson);
+    this.registryManager.removeEnvironment(name);
+    return true;
   }
 
-  public async installPackage(name: string, asJson = true, version?: string): Promise<string | object> {
-    const args = ['install', '--name', name, '-y'];
+  public async listEnvironments(forceRefresh = false, asJson = true): Promise<JsonArray> {
+    let environmentsFromConda = [] as JsonArray;
+
+    if (forceRefresh || this.registryManager.isEmpty()) {
+      await this.discoverEnvironments(forceRefresh);
+      const result = await this.getEnvironmentsFromConda(asJson);
+      environmentsFromConda = Array.isArray(result['envs']) ? result['envs'] as JsonArray : [];
+    } else {
+      environmentsFromConda = this.getEnvironmentsFromRegistry();
+    }
+
+    return environmentsFromConda;
+  }
+
+  public async listPackages(environment: string, asJson = true, forceRefresh = true): Promise<Package[]> {
+    const args = ['list', '--name', environment];
+    if (asJson) args.push('--json');
+
+    const fetchPackagesFromConda = async (): Promise<Package[]> => {
+        const rawPackagesFromConda = await this.lockedStrictJSONExecHandler(args, `Failed to list packages in environment '${environment}'`);
+        const packagesFromConda = Array.isArray(rawPackagesFromConda) ? rawPackagesFromConda as Package[] : [];
+        this.registryManager.addEnvironmentPackages(environment, packagesFromConda);
+        return packagesFromConda;
+    };
+
+    let packagesFromRegistry: Package[];
+    if (forceRefresh || !(this.registryManager.getEnvironmentPackages(environment))) {
+        packagesFromRegistry = await fetchPackagesFromConda();
+    } else {
+        packagesFromRegistry = this.registryManager.getEnvironmentPackages(environment) || await fetchPackagesFromConda();
+    }
+    return packagesFromRegistry;
+  }
+
+  public async updateEnvironmentPackages(name: string, asJson = true): Promise<Package[]> {
+    const args = ['env', 'update', '--name', name, '-y'];
+    // Delete the package data in the registry for the environment
+    this.registryManager.removeEnvironmentPackages(name);
+    await this.execHandler(args, `Failed to update environment '${name}'`, asJson);
+    return this.listPackages(name, asJson, true);
+  }
+
+  public async installPackage(environment: string, name: string, asJson = true, version?: string): Promise<string | object> {
+    const args = ['install', '--name', environment, '-y'];
     if (asJson) args.push('--json');
     if (version) args.push(`${name}=${version}`);
     else args.push(name);
 
-    return this.execHandler(args, `Failed to install package '${name}'`, asJson);
+    return this.lockedExecHandler(args, `Failed to install package '${name}'`);
   }
 
-  public async uninstallPackage(name: string, asJson = true): Promise<string | object> {
-    const args = ['remove', '--name', name, '-y'];
+  public async uninstallPackage(environment: string, name: string, asJson = true): Promise<string | object> {
+    const args = ['remove', '--name', environment, '-y'];
     if (asJson) args.push('--json');
+    args.push(name);
 
-    return this.execHandler(args, `Failed to uninstall package '${name}'`, asJson);
+    return this.lockedExecHandler(args, `Failed to uninstall package '${name}'`);
   }
 
-  public async updatePackage(name: string, asJson = true): Promise<string | object> {
-    const args = ['update', '--name', name, '-y'];
+  public async updatePackage(environment: string, name: string, asJson = true): Promise<string | object> {
+    const args = ['update', '--name', environment, '-y'];
     if (asJson) args.push('--json');
+    args.push(name);
 
-    return this.execHandler(args, `Failed to update package '${name}'`, asJson);
+    return this.lockedExecHandler(args, `Failed to update package '${name}'`);
   }
 
-  public async listPackages(name: string, asJson = true): Promise<string | object> {
-    const args = ['list', '--name', name, '-y'];
-    if (asJson) args.push('--json');
-
-    return this.execHandler(args, `Failed to list packages in environment '${name}'`, asJson);
-  }
-
-  public async searchForPackage(name: string, asJson = true): Promise<string | object> {
-    const args = ['search', '--name', name, '-y'];
-    if (asJson) args.push('--json');
-
-    return this.execHandler(args, `Failed to search for package '${name}'`, asJson);
-  }
-
-  public async getCondaVersion(asJson = true): Promise<string | object> {
-    const args = ['--version'];
-    if (asJson) args.push('--json');
-
-    return this.execHandler(args, 'Failed to get Conda version', asJson);
-  }
-
-  public async runCommand(environment: string | null, command: string): Promise<string | object> {
-    let args = ['run', 'bash', '-c', command];
-    if (environment) args = ['run', '-n', environment, 'bash', '-c', command];
-    return this.execHandler(args, `Failed to run command '${command}' inside Conda environment`, false);
+  public async searchForPackage(name: string, asJson = true, args: []): Promise<string | object> {
+    const flags: string[] = (args && args.length > 0) ? [...args, '--yes']: ['--all', '--yes'];
+    const cmd = ['search', `--name ${name}`, ...flags];
+    asJson && cmd.push('--json');
+    return this.lockedStrictJSONExecHandler(cmd, `Failed to search for package '${name}'`);
   }
 
   public async exportEnvironment(name: string, asJson = true): Promise<string | object> {
     const args = ['env', 'export', '--name', name];
     if(asJson) args.push('--json');
-    return this.execHandler(args, `Failed export environment '${name}'`, asJson);
+    return this.lockedExecHandler(args, `Failed export environment '${name}'`, asJson);
   }
 
-  // TODO: Add support for a config{} object for the args conda info can take, see https://docs.conda.io/projects/conda/en/latest/commands/info.html
-  public async condaInfo(asJson=true): Promise<string | object> {
-    const args = ['info'];
-    if(asJson) args.push('--json');
-    return this.execHandler(args, 'Failed to get conda info', asJson);
+  public async getCondaVersion(asJson = true): Promise<string | object> {
+    const args = ['--version'];
+    asJson && args.push('--json');
+    return this.execHandler(args, 'Failed to get Conda version', asJson);
   }
 
-  // public async environmentDetails(name: string): Promise<string> {
-  //   const args = ['info', '--envs', name];
-  //   try {
-  //     const result = await this.executeWithLock(name, args);
-  //     return result;
-  //   } catch (error) {
-  //     this.log?.error(`Failed to get details for environment '${name}': ${error}`);
-  //     throw error;
-  //   }
-  // }
+  public async condaInfo(asJson=true, args = []): Promise<string | object> {
+    const flags: string[] = (args && args.length > 0) ? [...args, '--yes']: ['--all', '--yes'];
+    const cmd = ['info', ...flags];
+    asJson && cmd.push('--json');
+    return this.lockedStrictJSONExecHandler(args, 'Failed to get conda info');
+  }
+
+
+  public async runCommand(environment: string | null, command: string): Promise<string> {
+    const args = ['run'];
+
+    if(environment) {
+      args.push('-n', environment);
+    }
+    args.push('bash', '-c', command);
+
+    try {
+      const result = await this.clicontrol.exec(null, this.condaCommand, args);
+      this.handleCommandResult(this.condaCommand, result);
+      return result.stdout.toString().trim();
+    } catch (error) {
+      const err = new Error(`Failed to run command '${command}': ${error}`);
+      this.log?.error(err);
+      throw error;
+    }
+  }
 }
