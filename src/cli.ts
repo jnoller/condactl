@@ -3,12 +3,15 @@
 import { Command } from 'commander';
 import { EnvironmentManager } from './environmentManager';
 import createLogger from './logging';
-import { LOG_LEVEL } from './config';
+//import { LOG_LEVEL } from './config';
 
 const program = new Command();
-const logger = createLogger(LOG_LEVEL);
+const logger = createLogger('DEBUG');
 const manager = EnvironmentManager.getInstance();
 
+function terminateProgram(){
+  process.exit(0);
+}
 
 program
   .command('create <name>')
@@ -20,6 +23,7 @@ program
     } catch (error) {
       logger.error(`Failed to create environment: ${error}`);
     }
+    terminateProgram();
   });
 
 
@@ -29,6 +33,7 @@ program
   .action(async (options) => {
     const result = await manager.discoverEnvironments(options.force);
     logger.info(`Environments discovery was successful: ${result}`);
+    terminateProgram();
   });
 
 program
@@ -45,6 +50,7 @@ program
     } catch (error) {
       logger.error(`Failed to rename environment: ${error}`);
     }
+    terminateProgram();
   });
 
   program
@@ -57,8 +63,9 @@ program
     } catch (error) {
       logger.error(`Failed to remove environment: ${error}`);
     }
+    terminateProgram();
   });
-
+/*
 program
   .command('listEnvironments')
   .option('-f, --forceRefresh', 'Force Refresh', false)
@@ -66,6 +73,16 @@ program
   .action(async (cmd) => {
     const environments = await manager.listEnvironments(cmd.forceRefresh, cmd.json);
     logger.info(`List of environments: ${JSON.stringify(environments)}`);
+    terminateProgram();
+  });
+*/
+
+program
+  .command('listEnvironments')
+  .action(async () => {
+    const environments = await manager.listEnvironments();
+    logger.info(`List of environments: ${JSON.stringify(environments)}`);
+    terminateProgram();
   });
 
 program
@@ -75,6 +92,7 @@ program
   .action(async (environment, cmd) => {
     const packages = await manager.listPackages(environment, cmd.json, cmd.forceRefresh);
     logger.info(`List of packages in environment: ${JSON.stringify(packages)}`);
+    terminateProgram();
   });
 
 program
@@ -83,6 +101,7 @@ program
   .action(async (name, cmd) => {
     const packages = await manager.updateEnvironmentPackages(name, cmd.json);
     logger.info(`Updated environment packages: ${JSON.stringify(packages)}`);
+    terminateProgram();
   });
 
 program
@@ -92,6 +111,7 @@ program
   .action(async (environment, name, cmd) => {
     const result = await manager.installPackage(environment, name, cmd.json, cmd.version);
     logger.info(`Installed package: ${JSON.stringify(result)}`);
+    terminateProgram();
   });
 
 program
@@ -100,6 +120,7 @@ program
   .action(async (environment, name, cmd) => {
     const result = await manager.uninstallPackage(environment, name, cmd.json);
     logger.info(`Removed package: ${JSON.stringify(result)}`);
+    terminateProgram();
   });
 
 program
@@ -108,6 +129,7 @@ program
   .action(async (environment, name, cmd) => {
     const result = await manager.updatePackage(environment, name, cmd.json);
     logger.info(`Updated package: ${JSON.stringify(result)}`);
+    terminateProgram();
   });
 
 
@@ -119,6 +141,7 @@ program
     const args = cmd.args.slice(1);
     const result = await manager.searchForPackage(name, cmd.json, args);
     logger.info(`Search Results: ${JSON.stringify(result)}`);
+    terminateProgram();
   });
 
 program
@@ -127,6 +150,7 @@ program
   .action(async (name, cmd) => {
     const result = await manager.exportEnvironment(name, cmd.json);
     logger.info(`Environment export: ${JSON.stringify(result)}`);
+    terminateProgram();
   });
 
 program
@@ -135,6 +159,7 @@ program
   .action(async (cmd) => {
     const version = await manager.getCondaVersion(cmd.json);
     logger.info(`Conda version: ${JSON.stringify(version)}`);
+    terminateProgram();
   });
 
 program
@@ -145,6 +170,7 @@ program
     const args = cmd.args;
     const info = await manager.condaInfo(cmd.json, args);
     logger.info(`Conda Info: ${JSON.stringify(info)}`);
+    terminateProgram();
   });
 
 program
@@ -156,10 +182,12 @@ program
     } catch (error) {
       logger.error(`Failed to run command: ${error}`);
     }
+    terminateProgram();
   });
 
   program.command('*', { noHelp: true }).action(() => {
     program.outputHelp();
+    terminateProgram();
   });
 
   program.parse(process.argv);

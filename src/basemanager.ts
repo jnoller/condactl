@@ -100,10 +100,6 @@ export abstract class BaseManager {
     return await this.lockedStrictJSONExecHandler(args, 'Failed to list environments');
   }
 
-  public getEnvironmentsFromRegistry(): JsonArray {
-    return this.registryManager.listEnvironments() as JsonArray;
-  }
-
   public async getExtendedEnvironmentInfo(environmentName: string): Promise<{name: string, prefix: string, channels: string[]}> {
     const args = ['env', 'export', '-n', environmentName, '--json'];
     const result = await this.lockedStrictJSONExecHandler(args, 'Failed to discover environments');

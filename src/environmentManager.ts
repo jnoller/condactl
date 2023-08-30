@@ -24,34 +24,39 @@ export class EnvironmentManager extends BaseManager {
     return EnvironmentManager.instance;
   }
 
-  public async discoverEnvironments(forceRefresh = true): Promise<boolean> {
+  public getEnvironmentsFromRegistry(): string[] {
+    return this.registryManager.listAllEnvironments();
+  }
+
+  public async discoverEnvironments(forceRefresh = false): Promise<string[]> {
     if (forceRefresh) {
-      this.log?.debug(`forceRefresh true, deleting collections from registry: ${this.registryManager.registryPath}`);
+      this.log?.debug(`forceRefresh true, flushing: ${this.registryManager.registryPath}`);
       this.registryManager.clearRegistry();
-    } else {
-      this.log?.info(`Loaded registry / cache: ${this.registryManager.registryPath}`);
     }
+    const envnames = this.registryManager.listAllEnvironments();
+    this.log?.debug(`discoverEnvironments: envnames: ${JSON.stringify(envnames)}`);
+    if (!forceRefresh && envnames && envnames.length > 0) {
+      return envnames // no-op, pull from cache
+    }
+    this.log?.debug(`discoverEnvironments: rebuilding from cli`);
+    const args = ['env', 'list', '--json'];
+    const result = await this.lockedStrictJSONExecHandler(args, 'Failed to discover environments');
+    this.log?.debug(`discoverEnvironments: result: ${JSON.stringify(result)}`);
+    const condaEnvironments = Array.isArray(result['envs']) ? result['envs'] as string[] : [];
 
-    const environments = this.registryManager.listEnvironments();
-    if (Object.keys(environments).length === 0) {
-      this.log?.info('Registry empty, discovering environments.');
-      const args = ['env', 'list', '--json'];
-      const result = await this.lockedStrictJSONExecHandler(args, 'Failed to discover environments');
-      const condaEnvironments = Array.isArray(result['envs']) ? result['envs'] as string[] : [];
-
-      for (const env of condaEnvironments) {
-        if (env && env !== '') {
-          const envname = path.basename(env);
-          const {name, prefix, channels} = await this.getExtendedEnvironmentInfo(envname);
-          this.registryManager.addEnvironment(name, prefix, channels);
-          this.log?.info(`Environment: ${name} added to registry.`);
-        }
+    for (const env of condaEnvironments) {
+      if (env && env !== '') {
+        const envname = path.basename(env);
+        if (envname === 'anaconda3') continue;
+        const {name, prefix, channels} = await this.getExtendedEnvironmentInfo(envname);
+        this.registryManager.addEnvironment(name, prefix, channels);
       }
-    } else {
-      this.log?.info(`Using cached environments: ${JSON.stringify(environments)}`);
-      return true;
     }
-    return true;
+    return this.registryManager.listAllEnvironments();
+  }
+
+  public async listEnvironments(): Promise<JsonArray> {
+    return this.getEnvironmentsFromRegistry();
   }
 
   public async createEnvironment(name: string): Promise<EnvironmentData> {
@@ -145,20 +150,6 @@ export class EnvironmentManager extends BaseManager {
     await this.lockedExecHandler(args, `Failed to remove environment '${name}'`, asJson);
     this.registryManager.removeEnvironment(name);
     return true;
-  }
-
-  public async listEnvironments(forceRefresh = false, asJson = true): Promise<JsonArray> {
-    let environmentsFromConda = [] as JsonArray;
-
-    if (forceRefresh || this.registryManager.isEmpty()) {
-      await this.discoverEnvironments(forceRefresh);
-      const result = await this.getEnvironmentsFromConda(asJson);
-      environmentsFromConda = Array.isArray(result['envs']) ? result['envs'] as JsonArray : [];
-    } else {
-      environmentsFromConda = this.getEnvironmentsFromRegistry();
-    }
-
-    return environmentsFromConda;
   }
 
   public async listPackages(environment: string, asJson = true, forceRefresh = true): Promise<Package[]> {
