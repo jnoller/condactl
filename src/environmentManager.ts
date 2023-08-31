@@ -6,6 +6,10 @@ import * as fs from 'fs';
 import { RegistryManager, EnvironmentData, Package } from './registry';
 import * as path from 'path';
 
+function sleep() {
+  return new Promise(resolve => setTimeout(resolve, 1000));
+}
+
 export class EnvironmentManager extends BaseManager {
   private static instance: EnvironmentManager;
 
@@ -33,7 +37,9 @@ export class EnvironmentManager extends BaseManager {
       this.log?.debug(`forceRefresh true, flushing: ${this.registryManager.registryPath}`);
       this.registryManager.clearRegistry();
     }
+    await sleep();
     const envnames = this.registryManager.listAllEnvironments();
+
     this.log?.debug(`discoverEnvironments: envnames: ${JSON.stringify(envnames)}`);
     if (!forceRefresh && envnames && envnames.length > 0) {
       return envnames // no-op, pull from cache

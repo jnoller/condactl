@@ -38,31 +38,37 @@ export class RegistryManager {
     const adapter = new LokiFsAdapter();
     this.db = new Loki(this.registryPath, {
       adapter: adapter,
+      autoload: true,
+      autoloadCallback: this.setupDB,
+      autosave: true,
+      autosaveInterval: 5,
     });
-    this.db.loadDatabase();
-    this.databaseInitialize();
+  };
+
+  private setupCollection(collectionName: string, options?: { autoupdate?: boolean, unique?: string[] }): Collection {
+    let collection = this.db.getCollection(collectionName);
+    if (!collection) {
+      this.log?.debug(`setupCollection: collection ${collectionName} does not exist, creating...`);
+      collection = this.db.addCollection(collectionName, options);
+    } else {
+      this.log?.debug(`setupCollection: collection ${collectionName} exists, loading...`);
+    }
+    return collection;
+}
+
+  private setupDB = (): void => {
+    this.db.loadDatabase({}, () => {
+      this.condaInfo = this.setupCollection('condaInfo', { autoupdate: true });
+      this.environments = this.setupCollection('environments', { autoupdate: true, unique: ['name'] });
+      this.log?.debug(`initcache: condaInfo: ${JSON.stringify(this.condaInfo)}`);
+      this.log?.debug(`initcache: environments: ${JSON.stringify(this.environments)}`);
+    });
   }
 
-  private databaseInitialize = () => {
-    this.condaInfo = this.db.getCollection('condaInfo');
-    this.environments = this.db.getCollection('environments');
-    this.log?.debug(`initcache: condaInfo: ${this.condaInfo}`);
-    this.log?.debug(`initcache: environments: ${JSON.stringify(this.environments)}`);
-    if (!this.condaInfo) {
-      this.log?.debug(`initcache: creating condaInfo collection`);
-      this.condaInfo = this.db.addCollection('condaInfo', {autoupdate: true});
-    }
-    if (!this.environments) {
-      this.log?.debug(`initcache: creating environments collection`);
-      this.environments = this.db.addCollection('environments', { autoupdate: true, unique: ['name'] });
-    }
-  };
 
   public clearRegistry(): void {
     this.db.removeCollection('condaInfo');
     this.db.removeCollection('environments');
-    this.db.saveDatabase();
-    this.databaseInitialize();
   }
 
   public doesEnvironmentExist(environmentName: string): boolean {
@@ -109,8 +115,12 @@ export class RegistryManager {
   }
 
   public listAllEnvironments(): string[] {
-    const environments = this.environments.chain().data() as EnvironmentData[];
-    this.log?.debug(`listAllEnvironments: ${JSON.stringify(environments)}`);
+    // replace usage of chain here
+    if (!this.environments) {
+      throw new Error('listAllEnvironments: environments collection not initialized.');
+    }
+    const environments = this.environments.find() as EnvironmentData[];
+    this.log?.debug(`listEnvironments: ${JSON.stringify(environments)}`);
     return environments.map((env) => env.name);
   }
 
